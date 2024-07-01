@@ -244,7 +244,7 @@ namespace Murder.Services
                 return false;
             }
 
-            if (Raycast(world, origin, target, CollisionLayersBase.BLOCK_VISION, 
+            if (Raycast(world, origin, target, CollisionLayersBase.BLOCK_VISION,
                 Enumerable.Empty<int>(), out RaycastHit hit))
             {
                 if (hit.Entity?.EntityId == to.EntityId)
@@ -1225,7 +1225,7 @@ namespace Murder.Services
                     Rectangle rect1 = box1.Rectangle.AddPosition(position1);
                     Rectangle rect2 = box2.Rectangle.AddPosition(position2);
 
-                    if (rect1.Touches(rect2))
+                    if (rect1.TouchesInside(rect2))
                     {
                         return true;
                     }
