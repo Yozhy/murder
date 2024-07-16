@@ -2,21 +2,30 @@
 using Murder.Services;
 using Murder.Utilities;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Numerics;
+using System.Text.Json.Serialization;
 
 namespace Murder.Core.Geometry
 {
     public readonly struct Polygon
     {
         public static readonly Polygon EMPTY = new();
-        public static readonly Polygon DIAMOND = new(new Vector2[] { new(-10, 0), new(0, -10), new(10, 0), new(0, 10) });
-        public readonly ImmutableArray<Vector2> Vertices = ImmutableArray<Vector2>.Empty;
+        public static readonly Polygon DIAMOND = new([new(-10, 0), new(0, -10), new(10, 0), new(0, 10)]);
 
-        public Polygon()
+        public readonly ImmutableArray<Vector2> Vertices = [];
+
+        [JsonIgnore]
+        public readonly ImmutableArray<Vector2> Normals = [];
+
+        [JsonConstructor]
+        public Polygon(ImmutableArray<Vector2> vertices)
         {
-            Vertices = ImmutableArray<Vector2>.Empty;
+            Vertices = vertices;
+            Normals = GetNormals().ToImmutableArray();
         }
-        public Polygon(IEnumerable<Vector2> vertices) { Vertices = vertices.ToImmutableArray(); }
+
+        public Polygon(IEnumerable<Vector2> vertices) : this(vertices.ToImmutableArray()) { }
 
         public Polygon(IEnumerable<Vector2> vertices, Vector2 position)
         {
@@ -27,16 +36,29 @@ namespace Murder.Core.Geometry
             }
 
             Vertices = builder.ToImmutable();
+            Normals = GetNormals().ToImmutableArray();
         }
+
+        private static readonly Vector2[] _rectangleCache = new Vector2[4];
+
         public static Polygon FromRectangle(int x, int y, int width, int height)
         {
-            return new Polygon(new Vector2[] {
-                new Vector2(x,y),
-                new Vector2(x+ width,y),
-                new Vector2(x + width,y + height),
-                new Vector2(x,y + height)
-            });
+            _rectangleCache[0] = new Vector2(x, y);
+            _rectangleCache[1] = new Vector2(x + width, y);
+            _rectangleCache[2] = new Vector2(x + width, y + height);
+            _rectangleCache[3] = new Vector2(x, y + height);
+            return new Polygon(_rectangleCache);
         }
+        public static Polygon FromRectangle(IntRectangle rectangle)
+        {
+            _rectangleCache[0] = new Vector2(rectangle.X, rectangle.Y);
+            _rectangleCache[1] = new Vector2(rectangle.X + rectangle.Width , rectangle.Y);
+            _rectangleCache[2] = new Vector2(rectangle.X + rectangle.Width, rectangle.Y + rectangle.Height);
+            _rectangleCache[3] = new Vector2(rectangle.X, rectangle.Y + rectangle.Height);
+
+            return new Polygon(_rectangleCache);
+        }
+
         public bool Contains(Vector2 vector)
         {
             (float px, float py) = (vector.X, vector.Y);
@@ -251,7 +273,6 @@ namespace Murder.Core.Geometry
 
             return intersects;
         }
-
         /// <summary>
         /// Check if a polygon is inside another, if they do, return the minimum translation vector to move the polygon out of the other.
         /// </summary>
@@ -261,47 +282,65 @@ namespace Murder.Core.Geometry
         /// <returns></returns>
         public Vector2? Intersects(Polygon other, Vector2 positionA, Vector2 positionB)
         {
-            List<Vector2> axes = GetNormals().ToList(); //[PERF] List? This can be optimized
-            axes.AddRange(other.GetNormals());
+            void CheckOverlap(ref float minOverlap, ref Vector2? mtvAxis, Vector2 axis, (float Min, float Max) projectionA, (float Min, float Max) projectionB)
+            {
+                float overlapA = projectionA.Max - projectionB.Min;
+                float overlapB = projectionB.Max - projectionA.Min;
+
+                bool useOverlapA = overlapA < overlapB;
+                float overlap = useOverlapA ? overlapA : overlapB;
+
+                if (overlap < minOverlap)
+                {
+                    minOverlap = overlap;
+                    mtvAxis = axis * (useOverlapA ? 1.0f : -1.0f);
+                }
+            }
 
             float minOverlap = float.MaxValue;
             Vector2? mtvAxis = null;
+            const float epsilon = 1e-6f;
 
-            foreach (Vector2 axis in axes)
+            // Check axes of this polygon
+            for (int i = 0; i < Normals.Length; i++)
             {
+                var axis = Normals[i];
+
                 (float Min, float Max) projectionA = ProjectOntoAxis(axis, positionA);
                 (float Min, float Max) projectionB = other.ProjectOntoAxis(axis, positionB);
 
-                if (!GeometryServices.CheckOverlap(projectionA, projectionB))
+                if (!GeometryServices.CheckOverlap(projectionA, projectionB, epsilon))
                 {
                     return null; // No overlap, no collision
                 }
                 else
                 {
-                    float overlapA = projectionA.Max - projectionB.Min;
-                    float overlapB = projectionB.Max - projectionA.Min;
+                    CheckOverlap(ref minOverlap, ref mtvAxis, axis, projectionA, projectionB);
+                }
+            }
 
-                    bool useOverlapA = overlapA < overlapB;
-                    float overlap = useOverlapA ? overlapA : overlapB;
+            // Check axes of the other polygon
+            for (int i = 0; i < other.Normals.Length; i++)
+            {
+                var axis = other.Normals[i];
 
-                    if (overlap < minOverlap)
-                    {
-                        minOverlap = overlap;
-                        mtvAxis = axis * (useOverlapA ? 1.0f : -1.0f);
-                    }
+                (float Min, float Max) projectionA = ProjectOntoAxis(axis, positionA);
+                (float Min, float Max) projectionB = other.ProjectOntoAxis(axis, positionB);
 
-                    //float overlap = Math.Min(projectionA.Max - projectionB.Min, projectionB.Max - projectionA.Min);
-
-                    //if (overlap < minOverlap)
-                    //{
-                    //    minOverlap = overlap;
-                    //    mtvAxis = axis;
-                    //}
+                if (!GeometryServices.CheckOverlap(projectionA, projectionB, epsilon))
+                {
+                    return null; // No overlap, no collision
+                }
+                else
+                {
+                    CheckOverlap(ref minOverlap, ref mtvAxis, axis, projectionA, projectionB);
                 }
             }
 
             return mtvAxis * minOverlap;
         }
+
+
 
         internal bool CheckOverlap(Polygon polygon)
         {
@@ -342,7 +381,6 @@ namespace Murder.Core.Geometry
             return new Polygon(Vertices, position);
         }
 
-
         public (float Min, float Max) ProjectOntoAxis(Vector2 axis, Vector2 offset)
         {
             float min = Vector2.Dot(axis, Vertices[0] + offset);
@@ -358,7 +396,7 @@ namespace Murder.Core.Geometry
             return (min, max);
         }
 
-        public IEnumerable<Vector2> GetNormals()
+        private IEnumerable<Vector2> GetNormals()
         {
             // [PERF] We can cache the normals on creation
 

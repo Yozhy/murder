@@ -17,6 +17,7 @@ using Murder.Editor.ImGuiExtended;
 using Murder.Editor.Systems.Debug;
 using Murder.Editor.Utilities;
 using Murder.Utilities;
+using SDL2;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -33,6 +34,8 @@ namespace Murder.Editor
         public static EditorDataManager EditorData => (EditorDataManager)Instance._gameData;
 
         internal static EditorGraphLogger EditorGraphLogger => (EditorGraphLogger)Instance.GraphLogger;
+
+        internal static IMurderArchitect? Game => Instance._game as IMurderArchitect;
 
         public static UndoTracker Undo => Instance._undo;
 
@@ -162,7 +165,7 @@ namespace Murder.Editor
         {
             Microsoft.Xna.Framework.Media.MediaPlayer.Stop();
             Resume();
-            SoundPlayer.Stop(fadeOut: false, out _);
+            SoundPlayer.Stop(Murder.Core.Sounds.SoundLayer.Any, fadeOut: false);
 
             GameLogger.Verify(_sceneLoader is not null);
 
@@ -383,53 +386,6 @@ namespace Murder.Editor
             ImGuiRenderer.AfterLayout();
         }
 
-        public override void BeginImGuiTheme()
-        {
-            var theme = Game.Profile.Theme;
-            ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 3);
-            ImGui.PushStyleVar(ImGuiStyleVar.PopupRounding, 3);
-            ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 6);
-
-            ImGui.PushStyleColor(ImGuiCol.Text, theme.White);
-            ImGui.PushStyleColor(ImGuiCol.PopupBg, theme.Bg);
-            ImGui.PushStyleColor(ImGuiCol.WindowBg, theme.Bg);
-            ImGui.PushStyleColor(ImGuiCol.TitleBg, theme.BgFaded);
-            ImGui.PushStyleColor(ImGuiCol.TitleBgActive, theme.Faded);
-
-            ImGui.PushStyleColor(ImGuiCol.TextSelectedBg, theme.Accent);
-            ImGui.PushStyleColor(ImGuiCol.ChildBg, theme.Bg);
-
-            ImGui.PushStyleColor(ImGuiCol.PopupBg, theme.Bg);
-
-            ImGui.PushStyleColor(ImGuiCol.Header, theme.Faded);
-            ImGui.PushStyleColor(ImGuiCol.HeaderActive, theme.Accent);
-            ImGui.PushStyleColor(ImGuiCol.HeaderHovered, theme.Accent);
-
-            ImGui.PushStyleColor(ImGuiCol.TabActive, theme.Accent);
-            ImGui.PushStyleColor(ImGuiCol.TabHovered, theme.HighAccent);
-            ImGui.PushStyleColor(ImGuiCol.TabUnfocused, theme.BgFaded);
-            ImGui.PushStyleColor(ImGuiCol.TabUnfocusedActive, theme.HighAccent);
-            ImGui.PushStyleColor(ImGuiCol.Tab, theme.BgFaded);
-            ImGui.PushStyleColor(ImGuiCol.DockingEmptyBg, theme.BgFaded);
-            ImGui.PushStyleColor(ImGuiCol.DockingPreview, theme.Faded);
-
-            ImGui.PushStyleColor(ImGuiCol.Button, theme.Foreground);
-            ImGui.PushStyleColor(ImGuiCol.ButtonActive, theme.HighAccent);
-            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, theme.Accent);
-
-            ImGui.PushStyleColor(ImGuiCol.FrameBg, theme.BgFaded);
-            ImGui.PushStyleColor(ImGuiCol.FrameBgActive, theme.Bg);
-            ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, theme.Bg);
-
-            ImGui.PushStyleColor(ImGuiCol.SeparatorActive, theme.Accent);
-            ImGui.PushStyleColor(ImGuiCol.ButtonActive, theme.HighAccent);
-        }
-        public override void EndImGuiTheme()
-        {
-            ImGui.PopStyleColor(25);
-            ImGui.PopStyleVar(3);
-        }
-
         protected override void OnExiting(object sender, EventArgs args)
         {
             GameLogger.Log("Wrapping up, bye!");
@@ -556,6 +512,7 @@ namespace Murder.Editor
             Input.MouseConsumed = ImGui.GetIO().WantCaptureMouse && _isPlayingGame;
             Input.KeyboardConsumed = ImGui.GetIO().WantCaptureKeyboard;
 
+
             base.Update(gameTime);
 
             if (EditorData.ShadersNeedReloading)
@@ -564,6 +521,7 @@ namespace Murder.Editor
                 EditorData.ReloadShaders();
             }
             
+            SDL.SDL_EventState(SDL.SDL_EventType.SDL_DROPFILE, SDL.SDL_ENABLE);
             UpdateCursor();
         }
 
