@@ -6,11 +6,10 @@ using Murder.Core.Graphics;
 using Murder.Utilities.Attributes;
 using System.Collections.Immutable;
 using System.Numerics;
-using System.Text.Json.Serialization;
 
 namespace Murder.Components
 {
-    [Requires(typeof(ITransformComponent))]
+    [Requires(typeof(PositionComponent))]
     [CustomName(" Sprite Component")]
     public readonly struct SpriteComponent : IComponent
     {
@@ -62,6 +61,9 @@ namespace Murder.Components
 
         public SpriteComponent() { }
 
+        public SpriteComponent(Guid guid) :
+            this(guid, Vector2.Zero, [], 0, false, false, OutlineStyle.Full, Batches2D.GameplayBatchId)
+        { }
         public SpriteComponent(Portrait portrait, int batchId) :
             this(portrait.Sprite, Vector2.Zero, [portrait.AnimationId], 0, false, false, OutlineStyle.Full, batchId)
         { }

@@ -110,7 +110,7 @@ namespace Murder.Editor.CustomEditors
                 }
             }
 
-            if (Architect.EditorSettings.CameraPositions.TryGetValue(targetGuid, out PersistStageInfo info))
+            if (Architect.EditorSettings.StageInfo.TryGetValue(targetGuid, out PersistStageInfo info))
             {
                 renderContext.Camera.Position = info.Position;
                 renderContext.RefreshWindow(Architect.GraphicsDevice, info.Size, info.Size, new ViewportResizeStyle(ViewportResizeMode.None));
@@ -281,12 +281,15 @@ namespace Murder.Editor.CustomEditors
                 }
 
                 // Do not modify the name for entity assets, only instances.
-                if (entityInstance is not PrefabAsset && ImGuiHelpers.IconButton('\uf304', $"rename_{entityInstance.Guid}"))
+                if (entityInstance is not PrefabAsset)
                 {
-                    ImGui.OpenPopup($"Rename#{entityInstance.Guid}");
-                }
+                    if (ImGuiHelpers.IconButton('\uf304', $"rename_{entityInstance.Guid}"))
+                    {
+                        ImGui.OpenPopup($"Rename#{entityInstance.Guid}");
+                    }
 
-                ImGuiHelpers.HelpTooltip("Rename");
+                    ImGuiHelpers.HelpTooltip("Rename");
+                }
 
                 if (instance is not null && parent is null && entityInstance is not PrefabEntityInstance)
                 {
@@ -351,38 +354,56 @@ namespace Murder.Editor.CustomEditors
                         ImGui.PushStyleColor(ImGuiCol.HeaderActive, Architect.Profile.Theme.RedFaded);
                         ImGui.PushStyleColor(ImGuiCol.Header, Architect.Profile.Theme.RedFaded);
                     }
-                    // Draw the component
-                    if (ImGui.TreeNodeEx(componentName, ImGuiTreeNodeFlags.Framed | ImGuiTreeNodeFlags.SpanAvailWidth))
+                    else
                     {
-                        ImGui.TreePop();
-                        if (ImGuiHelpers.DeleteButton($"Delete_{t}"))
-                        {   
-                            RemoveComponent(parent, entityInstance, t);
-                        }
-                        else if (canRevert && ImGuiHelpers.IconButton('\uf1da', $"revert_{t}", sameLine: true, tooltip: "Revert"))
+                        ImGui.PushStyleColor(ImGuiCol.HeaderHovered, Architect.Profile.Theme.Accent);
+                        ImGui.PushStyleColor(ImGuiCol.HeaderActive, Architect.Profile.Theme.HighAccent);
+                        ImGui.PushStyleColor(ImGuiCol.Header, Architect.Profile.Theme.BgFaded);
+                    }
+
+                    // Draw the component
+
+                    ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 10);
+                    if (ImGuiHelpers.DeleteButton($"Delete_{t}"))
+                    {
+                        RemoveComponent(parent, entityInstance, t);
+                    }
+
+                    if (canRevert)
+                    {
+                        ImGui.SameLine();
+                        if (ImGuiHelpers.IconButton('\uf1da', $"revert_{t}", sameLine: true, tooltip: "Revert"))
                         {
                             RevertComponent(parent, entityInstance, t);
                         }
-                        else
-                        {
-                            // TODO: This is modifying the memory of all readonly structs.
-                            IComponent copy = SerializationHelper.DeepCopy(c);
-                            
-                            if (CustomComponent.ShowEditorOf(ref copy))
-                            {
-                                ActWithUndo(
-                                    @do: () => ReplaceComponent(parent, entityInstance, copy),
-                                    undo: () => ReplaceComponent(parent, entityInstance, c));
-                            }
+                    }
 
-                            isOpen = true;
+                    ImGui.PopStyleVar();
+
+                    ImGui.SameLine();
+                    bool open = ImGui.TreeNodeEx(componentName, ImGuiTreeNodeFlags.Framed | ImGuiTreeNodeFlags.SpanAvailWidth);
+                    if (open)
+                    {
+                        ImGui.TreePop();
+                    }
+
+
+                    if (open)
+                    {
+
+                        // TODO: This is modifying the memory of all readonly structs.
+                        IComponent copy = SerializationHelper.DeepCopy(c);
+                        if (CustomComponent.ShowEditorOf(ref copy))
+                        {
+                            ActWithUndo(
+                                @do: () => ReplaceComponent(parent, entityInstance, copy),
+                                undo: () => ReplaceComponent(parent, entityInstance, c));
                         }
 
+                        isOpen = true;
                     }
-                    if (canRevert)
-                    {
-                        ImGui.PopStyleColor(3);
-                    }
+
+                    ImGui.PopStyleColor(3);
 
                     if (!Stages.ContainsKey(_asset.Guid))
                     {
@@ -421,7 +442,7 @@ namespace Murder.Editor.CustomEditors
 
             ImGui.Separator();
 
-            if (!(entityInstance.HasComponent(typeof(ITransformComponent))))
+            if (!entityInstance.HasComponent(typeof(ITransformComponent)))
             {
                 if (ImGui.Button("+\uf0b2"))
                 {
@@ -430,7 +451,8 @@ namespace Murder.Editor.CustomEditors
                 ImGuiHelpers.HelpTooltip("Add PositionComponent");
                 ImGui.SameLine();
             }
-            if (!(entityInstance.HasComponent(typeof(SpriteComponent))))
+
+            if (!entityInstance.HasComponent(typeof(SpriteComponent)))
             {
                 if (ImGui.Button("+\uf03e"))
                 {
@@ -440,13 +462,29 @@ namespace Murder.Editor.CustomEditors
                 ImGui.SameLine();
             }
 
-            if (!(entityInstance.HasComponent(typeof(ColliderComponent))))
+            if (!entityInstance.HasComponent(typeof(ColliderComponent)))
             {
                 if (ImGui.Button("+\uf0c8"))
                 {
+                    if (!entityInstance.HasComponent(typeof(PositionComponent)))
+                    {
+                        AddComponent(parent, entityInstance, typeof(PositionComponent));
+                    }
                     AddComponent(parent, entityInstance, typeof(ColliderComponent));
                 }
                 ImGuiHelpers.HelpTooltip("Add ColliderComponent");
+                ImGui.SameLine();
+            }
+
+            if (entityInstance.Components.Length <= 1)
+            {
+                if (ImGui.Button("+\uf001"))
+                {
+                    AddComponent(parent, entityInstance, typeof(SoundShapeComponent));
+                    AddComponent(parent, entityInstance, typeof(AmbienceComponent));
+                }
+
+                ImGuiHelpers.HelpTooltip("Add sound events on area...");
                 ImGui.SameLine();
             }
 
@@ -1008,7 +1046,7 @@ namespace Murder.Editor.CustomEditors
             if (stage.FindInstance(entityId) is IEntity entity)
             {
                 IComponent componentBefore = entity.GetComponent(c.GetType());
-                if (!componentBefore.Equals(c))
+                if (!IComponent.Equals(componentBefore, c))
                 {
                     ActWithUndo(
                         @do: () =>
@@ -1025,7 +1063,7 @@ namespace Murder.Editor.CustomEditors
             else if (stage.FindChildInstance(entityId) is (IEntity parent, Guid child))
             {
                 if (parent.TryGetComponentForChild(child, c.GetType()) is IComponent childComponent &&
-                    !childComponent.Equals(c))
+                    !IComponent.Equals(childComponent, c))
                 {
                     ActWithUndo(
                         @do: () =>

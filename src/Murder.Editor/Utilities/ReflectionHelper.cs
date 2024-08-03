@@ -1,4 +1,5 @@
 ﻿using Bang;
+using Bang.Components;
 using Bang.StateMachines;
 using Murder.Attributes;
 using Murder.Editor.Reflection;
@@ -78,10 +79,13 @@ namespace Murder.Editor.Utilities
 
         public static IEnumerable<Type> GetAllTypesWithAttributeDefinedOfType<T>(Type ofType)
         {
-            var type = typeof(T);
+            return GetAllTypesWithAttributeDefinedOfType(typeof(T), ofType);
+        }
 
+        public static IEnumerable<Type> GetAllTypesWithAttributeDefinedOfType(Type attributeType, Type ofType)
+        {
             return SafeGetAllTypesInAllAssemblies()
-                .Where(p => Attribute.IsDefined(p, type) && ofType.IsAssignableFrom(p));
+                .Where(p => Attribute.IsDefined(p, attributeType) && ofType.IsAssignableFrom(p));
         }
 
         public static Type? TryFindType(string name)
@@ -207,10 +211,34 @@ namespace Murder.Editor.Utilities
             return _allTypesInAllAssemblies;
         }
 
+        /// <summary>
+        /// Cache a dictionary that maps attributes -> components that have that attribute.
+        /// This is used by <see cref="FetchComponentsWithAttribute"/>.
+        /// </summary>
+        private static readonly Dictionary<Type, Type[]> _componentsWithAttributeCache = [];
+
+        public static Type[] FetchComponentsWithAttribute<T>(bool cache = true) where T : Attribute
+        {
+            if (_componentsWithAttributeCache.TryGetValue(typeof(T), out Type[]? result))
+            {
+                return result;
+            }
+
+            result = ReflectionHelper.GetAllTypesWithAttributeDefinedOfType<T>(typeof(IComponent)).ToArray();
+            if (cache)
+            {
+                _componentsWithAttributeCache[typeof(T)] = result;
+            }
+
+            return result;
+        }
+
         public static void ClearCache()
         {
             _allTypesInAllAssemblies = null;
+
             _cachedTypesWithAttributes.Clear();
+            _componentsWithAttributeCache.Clear();
         }
     }
 }

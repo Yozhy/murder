@@ -4,12 +4,17 @@ using Murder.Core.Sounds;
 using Murder.Diagnostics;
 using Murder.Helpers;
 using System.Collections.Immutable;
+using System.Numerics;
 
 namespace Murder.Services;
 
 public static class SoundServices
 {
-    public static ValueTask Play(SoundEventId id, Entity? target, SoundLayer layer = SoundLayer.Any, SoundProperties properties = SoundProperties.None)
+    public static ValueTask Play(
+        SoundEventId id, 
+        Entity? target, 
+        SoundLayer layer = SoundLayer.Any, 
+        SoundProperties properties = SoundProperties.None)
     {
         if (id.IsGuidEmpty || Game.Instance.IsSkippingDeltaTimeOnUpdate)
         {
@@ -17,14 +22,15 @@ public static class SoundServices
         }
 
         SoundSpatialAttributes? attributes = GetSpatialAttributes(target);
-        return Play(id, layer, properties, attributes);
+        return Play(id, layer, properties, attributes, target?.EntityId ?? -1);
     }
 
     public static async ValueTask Play(
         SoundEventId id, 
         SoundLayer layer = SoundLayer.Any, 
         SoundProperties properties = SoundProperties.None, 
-        SoundSpatialAttributes? attributes = null)
+        SoundSpatialAttributes? attributes = null,
+        int entityId = -1)
     {
         if (Game.Instance.IsSkippingDeltaTimeOnUpdate)
         {
@@ -34,7 +40,7 @@ public static class SoundServices
 
         if (!id.IsGuidEmpty)
         {
-            await Game.Sound.PlayEvent(id, new PlayEventInfo { Layer = layer, Properties = properties, Attributes = attributes });
+            await Game.Sound.PlayEvent(id, new PlayEventInfo { Layer = layer, Properties = properties, Attributes = attributes, EntityId = entityId });
         }
     }
 
@@ -60,9 +66,9 @@ public static class SoundServices
         }
     }
 
-    public static void Stop(SoundEventId? id, bool fadeOut)
+    public static void Stop(SoundEventId? id, bool fadeOut, int entityId = -1)
     {
-        Game.Sound.Stop(id, fadeOut);
+        Game.Sound.Stop(id, entityId, fadeOut);
     }
 
     /// <summary>
@@ -98,7 +104,13 @@ public static class SoundServices
             return;
         }
 
-        Game.Sound.UpdateEvent(eventId, attributes.Value);
+        Game.Sound.UpdateEvent(eventId, e.EntityId, attributes.Value);
+    }
+
+    public static void TrackEventSourcePosition(SoundEventId eventId, int entityId, Vector2 position)
+    {
+        SoundSpatialAttributes attributes = GetSpatialAttributes(position);
+        Game.Sound.UpdateEvent(eventId, entityId, attributes);
     }
 
     /// <summary>
@@ -115,13 +127,42 @@ public static class SoundServices
         Entity root = EntityServices.FindRootEntity(target);
         if (root.TryGetTransform() is IMurderTransformComponent transform)
         {
-            attributes.Position = transform.Vector2;
+            attributes.Position = new Vector3(transform.Vector2.X, transform.Vector2.Y, z: 0);
         }
 
         if (target.TryGetFacing()?.Direction is Direction direction)
         {
             attributes.Direction = direction;
         }
+
+        return attributes;
+    }
+
+    /// <summary>
+    /// Return the spatial attributes for playing a sound from <paramref name="position"/>.
+    /// </summary>
+    /// <param name="position">Position for listener.</param>
+    public static SoundSpatialAttributes GetSpatialAttributes(Vector3 position)
+    {
+        SoundSpatialAttributes attributes = new()
+        {
+            Position = position,
+            Direction = Direction.Up
+        };
+
+        return attributes;
+    }
+    /// <summary>
+    /// Return the spatial attributes for playing a sound from <paramref name="position"/>.
+    /// </summary>
+    /// <param name="position">Position for listener.</param>
+    public static SoundSpatialAttributes GetSpatialAttributes(Vector2 position)
+    {
+        SoundSpatialAttributes attributes = new()
+        {
+            Position = new(position.X, position.Y, 0),
+            Direction = Direction.Up
+        };
 
         return attributes;
     }
@@ -162,5 +203,13 @@ public static class SoundServices
         }
 
         return builder.ToImmutable();
+    }
+
+    public static void UpdateListenerPosition(Vector2 position)
+    {
+        Vector3 position3d = new(position.X, position.Y, 1);
+        SoundSpatialAttributes attributes = GetSpatialAttributes(position3d);
+
+        Game.Sound.UpdateListener(attributes);
     }
 }

@@ -3,6 +3,7 @@ using Microsoft.VisualBasic.FileIO;
 using Murder.Diagnostics;
 using System.Text;
 using Murder.Serialization;
+using Murder.Assets;
 
 namespace Murder.Editor.Utilities.Serialization;
 
@@ -13,20 +14,22 @@ internal static class LocalizationExporter
         Game.Profile.LocalizationPath,
          $"{name}.csv");
 
+    private static string Escape(string? text) => text is null ? string.Empty : text.Replace("\"", "\"\"");
+
     public static bool ExportToCsv(LocalizationAsset asset)
     {
         LocalizationAsset reference = Architect.EditorData.GetDefaultLocalization();
 
         StringBuilder builder = new();
 
-        builder.AppendLine("Guid,Original,Translated,Notes");
+        builder.AppendLine("Guid,Speaker,Original,Translated,Notes");
 
         HashSet<Guid> dialogueResources = new();
         foreach (LocalizationAsset.ResourceDataForAsset data in asset.DialogueResources)
         {
-            foreach (Guid g in data.Resources)
+            foreach (LocalizedDialogueData g in data.DataResources)
             {
-                dialogueResources.Add(g);
+                dialogueResources.Add(g.Guid);
             }
         }
 
@@ -39,25 +42,39 @@ internal static class LocalizationExporter
             }
 
             LocalizedStringData? referenceData = reference.TryGetResource(data.Guid);
-            builder.AppendLine($"{data.Guid},\"{referenceData?.String}\",\"{data.String}\",\"{data.Notes}\"");
+            builder.AppendLine($"{data.Guid},\"No speaker\",\"{Escape(referenceData?.String)}\",\"{Escape(data.String)}\",\"{data.Notes}\"");
         }
 
         // Now, put all these right at the end of the document.
         // Why, do you ask? Absolutely no reason. It just seemed reasonable that generated strings came later.
         foreach (LocalizationAsset.ResourceDataForAsset dialogueData in asset.DialogueResources)
         {
-            foreach (Guid g in dialogueData.Resources)
+            if (Game.Data.TryGetAsset<CharacterAsset>(dialogueData.DialogueResourceGuid) is CharacterAsset characterAsset)
             {
-                LocalizedStringData? data = asset.TryGetResource(g);
+                if (characterAsset.LocalizationNotes is null)
+                {
+                    builder.AppendLine($"## {characterAsset.GetSimplifiedName()} ##");
+                }
+                else
+                {
+                    builder.AppendLine($"## {characterAsset.GetSimplifiedName()} ##,\"{characterAsset.LocalizationNotes}\"");
+                }
+            }
+
+            foreach (LocalizedDialogueData localizedDialogueData in dialogueData.DataResources)
+            {
+                LocalizedStringData? data = asset.TryGetResource(localizedDialogueData.Guid);
                 if (data is null)
                 {
                     continue;
                 }
 
-                LocalizedStringData? referenceData = reference.TryGetResource(g);
+                LocalizedStringData? referenceData = reference.TryGetResource(data.Value.Guid);
+
+                string speakerName = Game.Data.TryGetAsset<SpeakerAsset>(localizedDialogueData.Speaker)?.SpeakerName ?? "No speaker";
 
                 builder.AppendLine(
-                    $"{data.Value.Guid},\"{referenceData?.String}\",\"{data.Value.String}\",\"{data.Value.Notes}\"");
+                    $"{data.Value.Guid},\"{speakerName}\",\"{Escape(referenceData?.String)}\",\"{Escape(data.Value.String)}\",\"{data.Value.Notes}\"");
             }
         }
 
@@ -88,7 +105,7 @@ internal static class LocalizationExporter
 
             // Read tokens for this row
             string[]? tokens = parser.ReadFields();
-            if (tokens is null || tokens[0].StartsWith("Guid"))
+            if (tokens is null || tokens[0].StartsWith("Guid") || tokens[0].StartsWith('#'))
             {
                 continue;
             }
@@ -112,8 +129,8 @@ internal static class LocalizationExporter
             /* not really used? */
             /* string original = tokens[1]; */
 
-            string translated = tokens.Length > 2 ? tokens[2] : string.Empty;
-            string? notes = tokens.Length > 3 ? tokens[3] : null;
+            string translated = tokens.Length > 3 ? tokens[3] : string.Empty;
+            string? notes = tokens.Length > 4 ? tokens[4] : null;
 
             asset.UpdateOrSetResource(guid, translated, notes);
         }

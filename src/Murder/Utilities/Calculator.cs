@@ -316,6 +316,48 @@ namespace Murder.Utilities
             return Ease.Evaluate(ClampTime(elapsed, maxTime), ease);
         }
 
+        /// <summary>
+        /// Maps a value within the range [0, 1] to a parabolic shape, where the corners are mapped to 0 and the center is mapped to 1.
+        /// The shape of the parabola can be controlled by the shape parameter.
+        /// </summary>
+        /// <param name="x">The input value within the range [0, 1].</param>
+        /// <param name="shape">
+        /// The power to which the parabolic function is raised, controlling the sharpness of the curve.
+        /// Typical range is [0.5, 3]:
+        /// - Values less than 1 make the curve wider and flatter.
+        /// - Values greater than 1 make the curve sharper and more peaked.
+        /// </param>
+        /// <returns>A float value representing the parabolic mapping of the input value.</returns>
+        public static float Parabola(float x, float shape)
+        {
+            return MathF.Pow(4.0f * x * (1.0f - x), shape);
+        }
+
+        /// <summary>
+        /// Maps a value within the range [0, 1] to a power curve shape, where the corners are mapped to 0.
+        /// The shape of the curve can be controlled independently on either side of the curve using the parameters a and b.
+        /// </summary>
+        /// <param name="x">The input value within the range [0, 1].</param>
+        /// <param name="a">
+        /// The power controlling the shape of the curve near the left corner (x = 0).
+        /// Typical range is [0.5, 3]:
+        /// - Lower values (&lt; 1) create a steeper rise near x = 0.
+        /// - Higher values (&gt; 1) create a more gradual rise near x = 0.
+        /// </param>
+        /// <param name="b">
+        /// The power controlling the shape of the curve near the right corner (x = 1).
+        /// Typical range is [0.5, 3]:
+        /// - Lower values (&lt; 1) create a steeper drop near x = 1.
+        /// - Higher values (&gt; 1) create a more gradual drop near x = 1.
+        /// </param>
+        /// <returns>A float value representing the power curve mapping of the input value.</returns>
+        public static float PowerCurve(float x, float a, float b)
+        {
+            float k = MathF.Pow(a + b, a + b) / (MathF.Pow(a, a) * MathF.Pow(b, b));
+            return k * MathF.Pow(x, a) * MathF.Pow(1.0f - x, b);
+        }
+
+
         public static float Approach(float from, float target, float amount)
         {
             if (from > target)

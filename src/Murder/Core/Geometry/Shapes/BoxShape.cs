@@ -4,14 +4,14 @@ using System.Numerics;
 
 namespace Murder.Core.Geometry
 {
-    public struct BoxShape : IShape
+    public record struct BoxShape : IShape
     {
         public readonly int Width = 16;
         public readonly int Height = 16;
 
         [Slider]
         public readonly Vector2 Origin = Vector2.Zero;
-        public readonly Point Offset = Point.One * 16;
+        public readonly Point Offset { get; init; } = Point.Zero;
 
         public Point Size => new(Width, Height);
 

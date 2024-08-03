@@ -3,6 +3,7 @@ using Bang.Contexts;
 using Bang.Entities;
 using Bang.Systems;
 using ImGuiNET;
+using Microsoft.Xna.Framework.Input;
 using Murder.Assets.Graphics;
 using Murder.Components;
 using Murder.Components.Graphics;
@@ -10,6 +11,7 @@ using Murder.Core;
 using Murder.Core.Geometry;
 using Murder.Core.Graphics;
 using Murder.Core.Input;
+using Murder.Editor.Attributes;
 using Murder.Editor.Components;
 using Murder.Editor.Messages;
 using Murder.Editor.Utilities;
@@ -21,6 +23,7 @@ using System.Numerics;
 
 namespace Murder.Editor.Systems;
 
+[EditorSystem]
 [Filter(typeof(ITransformComponent))]
 [Filter(filter: ContextAccessorFilter.AnyOf, typeof(SpriteComponent), typeof(AgentSpriteComponent))]
 [Filter(ContextAccessorFilter.NoneOf, typeof(ThreeSliceComponent))]
@@ -30,6 +33,9 @@ internal class SpriteRenderDebugSystem : IMurderRenderSystem, IGuiSystem
     private readonly static int _hash = typeof(DebugColliderRenderSystem).GetHashCode();
     private int _draggingY = -1;
     private int _hoverY = -1;
+
+    private const int _segments = 5;
+    private static readonly Vector2[] _verticesList = new Vector2[_segments + 2];
 
     public void Draw(RenderContext render, Context context)
     {
@@ -45,7 +51,7 @@ internal class SpriteRenderDebugSystem : IMurderRenderSystem, IGuiSystem
             overrideCurrentTime = timeline.Time;
         }
 
-        bool previewMode = Game.Input.Down(InputHelpers.OSActionModifier);
+        bool previewMode = Game.Input.Down(Keys.Space);
 
         foreach (var e in context.Entities)
         {
@@ -176,7 +182,7 @@ internal class SpriteRenderDebugSystem : IMurderRenderSystem, IGuiSystem
                         cursorPosition.Y < transform.Y + (ySortOffset + 3) )
                     {
                         color = Color.White;
-                        if (Game.Input.Pressed(MurderInputButtons.LeftClick) && !hook.CursorIsBusy.Any())
+                        if (!hook.UsingGui && Game.Input.Pressed(MurderInputButtons.LeftClick) && !hook.CursorIsBusy.Any())
                         {
                             hook.CursorIsBusy.Add(typeof(SpriteRenderDebugSystem));
                             _draggingY = e.EntityId;

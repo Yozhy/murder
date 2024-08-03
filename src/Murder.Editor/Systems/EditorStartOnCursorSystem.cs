@@ -1,4 +1,5 @@
 ﻿using Bang;
+using Bang.Components;
 using Bang.Contexts;
 using Bang.Systems;
 using ImGuiNET;
@@ -16,9 +17,9 @@ using Murder.Utilities;
 
 namespace Murder.Editor.Systems
 {
+    [WorldEditor(startActive: false)]
     [OnlyShowOnDebugView]
     [DoNotPause]
-    [WorldEditor(startActive: true)]
     [Filter(ContextAccessorFilter.None)]
     public class EditorStartOnCursorSystem : IStartupSystem, IUpdateSystem, IMurderRenderSystem
     {
@@ -33,6 +34,11 @@ namespace Murder.Editor.Systems
         /// This is the position currently selected by the cursor.
         /// </summary>
         private Point? _selectPosition;
+
+        /// <summary>
+        /// Track existing save states that we can load a state from.
+        /// </summary>
+        private (Guid Guid, string Name)[]? _saveStateInfo = null;
 
         public void Start(Context context)
         {
@@ -97,6 +103,10 @@ namespace Murder.Editor.Systems
         private bool DrawStartHere(World world)
         {
             EditorHook hook = world.GetUnique<EditorComponent>().EditorHook;
+            if (hook.EditorMode == EditorHook.EditorModes.EditMode)
+            {
+                return false;
+            }
 
             if (ImGui.BeginPopupContextItem("GameplayContextMenu", ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.NoReopen))
             {
@@ -122,7 +132,7 @@ namespace Murder.Editor.Systems
                         Architect.Instance.QueueStartPlayingGame(new StartPlayGameInfo
                         {
                             IsQuickplay = false,
-                            SaveSlot = allSaves.Count + 1,
+                            SaveSlot = Game.Data.GetNextAvailableSlot(),
                             StartingScene = world.Guid()
                         });
                     }
@@ -130,25 +140,53 @@ namespace Murder.Editor.Systems
 
                 if (ImGui.BeginMenu("Start playing with save"))
                 {
-                    ImGui.Text("Select a save to start playing with.");
-                    ImGui.Separator();
+                    ImGui.Text("Select a save to start playing with");
 
-                    foreach (var save in allSaves.Keys)
+                    if (allSaves.Count > 0)
                     {
-                        if (ImGui.MenuItem($"Slot {save}"))
-                        {
-                            hook.Cursor = CursorStyle.Normal;
+                        ImGui.Separator();
 
-                            Architect.EditorSettings.TestWorldPosition = hook.LastCursorWorldPosition;
-                            Architect.Instance.QueueStartPlayingGame(new StartPlayGameInfo
+                        foreach (var save in allSaves.Keys)
+                        {
+                            if (ImGui.MenuItem($"Slot {save}"))
                             {
-                                IsQuickplay = false,
-                                SaveSlot = save,
-                                StartingScene = world.Guid()
-                            });
+                                hook.Cursor = CursorStyle.Normal;
+
+                                Architect.EditorSettings.TestWorldPosition = hook.LastCursorWorldPosition;
+                                Architect.Instance.QueueStartPlayingGame(new StartPlayGameInfo
+                                {
+                                    IsQuickplay = false,
+                                    SaveSlot = save,
+                                    StartingScene = world.Guid()
+                                });
+                            }
                         }
                     }
+                    
+                    _saveStateInfo ??= Architect.EditorData.GetAllAvailableStartGameFrom();
 
+                    if (_saveStateInfo.Length > 0)
+                    {
+                        ImGui.Separator();
+
+                        foreach ((Guid g, string name) in _saveStateInfo)
+                        {
+                            if (ImGui.MenuItem($"State '{name}'"))
+                            {
+                                hook.Cursor = CursorStyle.Normal;
+
+                                Architect.EditorSettings.TestWorldPosition = hook.LastCursorWorldPosition;
+                                Architect.Instance.QueueStartPlayingGame(new StartPlayGameInfo
+                                {
+                                    IsQuickplay = false,
+                                    SaveSlot = Game.Data.GetNextAvailableSlot(),
+                                    StartingScene = world.Guid(),
+                                    LoadStateFrom = g
+                                });
+                            }
+                        }
+                    }
+                    
                     ImGui.EndMenu();
                 }
 

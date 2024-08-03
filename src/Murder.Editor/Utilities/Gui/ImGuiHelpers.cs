@@ -242,6 +242,7 @@ public static class ImGuiHelpers
     {
         ImGui.PushStyleColor(ImGuiCol.Text, selected ? selectedColor : unselectedColor);
         var clicked = ImGui.Selectable(icon.ToString());
+        ImGui.PopStyleColor();
         return clicked;
     }
 
@@ -261,8 +262,9 @@ public static class ImGuiHelpers
     {
         var clicked = ShowIcon(icon, selectedColor, unselectedColor, selected);
         ImGui.SameLine();
+        ImGui.PushStyleColor(ImGuiCol.Text, selected ? selectedColor : unselectedColor);
         clicked = ImGui.Selectable(text, selected) || clicked;
-
+        ImGui.PopStyleColor();
         return clicked;
     }
 
@@ -781,13 +783,13 @@ public static class ImGuiHelpers
         return interacted;
     }
 
-    public static void DrawBorderOnPreviousItem(Vector4 color, float padding)
+    public static void DrawBorderOnPreviousItem(Vector4 color, float padding, float rounding = 5)
     {
         Vector2 min = ImGui.GetItemRectMin() - new Vector2(padding);
         Vector2 max = ImGui.GetItemRectMax() + new Vector2(padding);
 
         var dl = ImGui.GetWindowDrawList();
 
-        dl.AddRect(min, max, Color.ToUint(color), 5);
+        dl.AddRect(min, max, Color.ToUint(color), rounding);
     }
 }

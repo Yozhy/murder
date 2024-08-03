@@ -26,13 +26,13 @@ namespace Murder.Editor.Systems
 
         public void Start(Context context)
         {
-            _filter = StageHelpers.FetchComponentsWithAttribute<StoryAttribute>();
+            _filter = ReflectionHelper.FetchComponentsWithAttribute<StoryAttribute>();
         }
 
         public void Update(Context context)
         {
             ImmutableArray<Entity> entities = FetchEntities(context.World);
-            Update(context.World, entities, clearOnlyWhenSelectedNewEntity: true, ignoreCursorOnCollidersSelected: false);
+            Update(context.World, entities, clearOnlyWhenSelectedNewEntity: true);
         }
 
         public void Draw(RenderContext render, Context context)

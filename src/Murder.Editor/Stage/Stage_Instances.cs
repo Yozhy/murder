@@ -56,7 +56,8 @@ namespace Murder.Editor.Stages
         public Stage(
             ImGuiRenderer imGuiRenderer,
             RenderContext renderContext,
-            IWorldAsset worldAsset) : this(imGuiRenderer, renderContext, false, worldAsset.WorldGuid)
+            StageType type,
+            IWorldAsset worldAsset) : this(imGuiRenderer, renderContext, type, worldAsset.WorldGuid)
         {
             _worldAsset = worldAsset;
 
@@ -270,6 +271,8 @@ namespace Murder.Editor.Stages
             {
                 UntrackEntity(child);
             }
+
+            EditorHook.UnselectEntity(e);
         }
 
         public virtual bool AddComponentForInstance(Guid? parentGuid, Guid entityGuid, IComponent c)

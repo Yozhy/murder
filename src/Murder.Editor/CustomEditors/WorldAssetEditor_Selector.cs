@@ -184,7 +184,7 @@ namespace Murder.Editor.CustomEditors
             }
             else
             {
-                ImGui.PushStyleColor(ImGuiCol.Text, Game.Profile.Theme.Faded);
+                ImGui.PushStyleColor(ImGuiCol.Text, Game.Profile.Theme.Accent);
                 pressed = ImGui.Button($"\uf058##{groupName}");
                 ImGui.PopStyleColor();
             }
@@ -205,7 +205,7 @@ namespace Murder.Editor.CustomEditors
             }
             else
             {
-                ImGui.PushStyleColor(ImGuiCol.Text, Game.Profile.Theme.Faded);
+                ImGui.PushStyleColor(ImGuiCol.Text, Game.Profile.Theme.Accent);
                 pressed = ImGui.Button($"\uf070##{groupName}");
                 ImGui.PopStyleColor();
             }
@@ -233,7 +233,7 @@ namespace Murder.Editor.CustomEditors
             }
             else
             {
-                ImGui.PushStyleColor(ImGuiCol.Text, Game.Profile.Theme.Faded);
+                ImGui.PushStyleColor(ImGuiCol.Text, Game.Profile.Theme.Accent);
                 pressed = ImGui.Button($"\uf3c1##{groupName}");
                 ImGui.PopStyleColor();
             }
@@ -341,7 +341,7 @@ namespace Murder.Editor.CustomEditors
 
                 if (ImGui.Selectable(name ?? "<?>", isSelected))
                 {
-                    _selecting = Stages[_asset.Guid].SelectEntity(entity, select: true);
+                    _selecting = Stages[_asset.Guid].SelectEntity(entity, select: true, clear: true);
                     if (_selecting is -1)
                     {
                         // Unable to find the entity. This probably means that it has been deactivated.

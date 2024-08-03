@@ -6,223 +6,113 @@ using Murder.Attributes;
 using Murder.Components;
 using Murder.Components.Serialization;
 using Murder.Core.Graphics;
-using Murder.Core.Input;
 using Murder.Diagnostics;
 using Murder.Editor.Attributes;
-using Murder.Editor.CustomComponents;
 using Murder.Editor.CustomEditors;
 using Murder.Editor.Utilities.Attributes;
 using Murder.Interactions;
 using Murder.Prefabs;
+using Murder.Utilities;
 using Murder.Utilities.Attributes;
-using System.Collections.Immutable;
+using System.Numerics;
 using System.Reflection;
 
 namespace Murder.Editor.Utilities;
 
 internal static class StageHelpers
 {
-    public static IList<(ISystem system, bool isActive)> FetchEditorSystems()
+    private static List<(Type tSystem, bool isActive)>? _cachedEditorSystems = null;
+
+    public static List<(Type tSystem, bool isActive)> FetchEditorTypeSystems()
     {
-        HashSet<Type> systemsAdded = new();
-
-        List<(ISystem, bool)> systems = new();
-
-        ImmutableArray<(Type systemType, bool isActive)> editorSystems = Architect.EditorSettings.EditorSystems;
-        for (int i = 0; i < editorSystems.Length; ++i)
+        if (_cachedEditorSystems is not null)
         {
-            (Type t, bool isActive) = editorSystems[i];
+            return _cachedEditorSystems;
+        }
+        
+        HashSet<Type> systemsAdded = new();
+        List<(Type, bool)> systems = new();
+
+        void AddSystem(Type t, bool isActive)
+        {
             if (systemsAdded.Contains(t))
             {
                 // Already added, so skip.
-                continue;
+                return;
             }
 
-            if (t is null)
+            if (Attribute.GetCustomAttribute(t, typeof(RequiresAttribute)) is RequiresAttribute requiresAttribute)
             {
-                // Remove and save the editor without this system.
-                Architect.EditorSettings.UpdateSystems(editorSystems.RemoveAt(i));
-                Architect.EditorData.SaveAsset(Architect.EditorSettings);
-
-                continue;
+                foreach (Type tt in requiresAttribute.Types)
+                {
+                    AddSystem(tt, isActive);
+                }
             }
 
-            if (Activator.CreateInstance(t) is ISystem system)
-            {
-                systems.Add((system, isActive));
-                systemsAdded.Add(t);
-            }
-            else
-            {
-                GameLogger.Error($"The {t} is not a valid system!");
-            }
+            systems.Add((t, isActive));
+            systemsAdded.Add(t);
         }
 
         // Fetch all the systems that are not included in the editor system.
         foreach (Type t in ReflectionHelper.GetAllTypesWithAttributeDefinedOfType<WorldEditorAttribute>(typeof(ISystem)))
         {
-            if (systemsAdded.Contains(t))
-            {
-                // Already added, so skip.
-                continue;
-            }
-
             WorldEditorAttribute worldAttribute = (WorldEditorAttribute)t.GetCustomAttribute(typeof(WorldEditorAttribute))!;
             bool isActive = worldAttribute.StartActive;
 
-            if (Activator.CreateInstance(t) is ISystem system)
-            {
-                systems.Add((system, isActive));
-                systemsAdded.Add(t);
-            }
-            else
-            {
-                GameLogger.Error($"The {t} is not a valid system!");
-            }
-        }
-
-        // Also start all story editors disabled by default.
-        foreach (Type t in ReflectionHelper.GetAllTypesWithAttributeDefinedOfType<StoryEditorAttribute>(typeof(ISystem)))
-        {
-            if (systemsAdded.Contains(t))
-            {
-                // Already added, so skip.
-                continue;
-            }
-
-            if (Activator.CreateInstance(t) is ISystem system)
-            {
-                systems.Add((system, /* isActive */ false));
-                systemsAdded.Add(t);
-            }
-            else
-            {
-                GameLogger.Error($"The {t} is not a valid system!");
-            }
-        }
-
-        // Also start all tile editors disabled by default.
-        foreach (Type t in ReflectionHelper.GetAllTypesWithAttributeDefinedOfType<TileEditorAttribute>(typeof(ISystem)))
-        {
-            if (systemsAdded.Contains(t))
-            {
-                // Already added, so skip.
-                continue;
-            }
-
-            if (Activator.CreateInstance(t) is ISystem system)
-            {
-                systems.Add((system, /* isActive */ false));
-                systemsAdded.Add(t);
-            }
-            else
-            {
-                GameLogger.Error($"The {t} is not a valid system!");
-            }
-        }
-
-        // Also start all pathfind editors disabled by default.
-        foreach (Type t in ReflectionHelper.GetAllTypesWithAttributeDefinedOfType<PathfindEditorAttribute>(typeof(ISystem)))
-        {
-            if (systemsAdded.Contains(t))
-            {
-                // Already added, so skip.
-                continue;
-            }
-
-            if (Activator.CreateInstance(t) is ISystem system)
-            {
-                systems.Add((system, /* isActive */ false));
-                systemsAdded.Add(t);
-            }
-            else
-            {
-                GameLogger.Error($"The {t} is not a valid system!");
-            }
-        }
-
-        // Aaaaand also start all sound editors.
-        foreach (Type t in ReflectionHelper.GetAllTypesWithAttributeDefinedOfType<SoundEditorAttribute>(typeof(ISystem)))
-        {
-            if (systemsAdded.Contains(t))
-            {
-                // Already added, so skip.
-                continue;
-            }
-
-            if (Activator.CreateInstance(t) is ISystem system)
-            {
-                systems.Add((system, /* isActive */ false));
-                systemsAdded.Add(t);
-            }
-            else
-            {
-                GameLogger.Error($"The {t} is not a valid system!");
-            }
-        }
-
-        // I am aware that we should be generalizing this already. But hear me out: I can do this later...
-        foreach (Type t in ReflectionHelper.GetAllTypesWithAttributeDefinedOfType<SpriteEditorAttribute>(typeof(ISystem)))
-        {
-            if (systemsAdded.Contains(t))
-            {
-                // Already added, so skip.
-                continue;
-            }
-
-            if (Activator.CreateInstance(t) is ISystem system)
-            {
-                systems.Add((system, /* isActive */ false));
-                systemsAdded.Add(t);
-            }
-            else
-            {
-                GameLogger.Error($"The {t} is not a valid system!");
-            }
+            AddSystem(t, isActive);
         }
 
         foreach (Type t in ReflectionHelper.GetAllTypesWithAttributeDefinedOfType<DefaultEditorSystemAttribute>(typeof(ISystem)))
         {
-            if (systemsAdded.Contains(t))
-            {
-                // Already added, so skip.
-                continue;
-            }
-
             DefaultEditorSystemAttribute attribute = (DefaultEditorSystemAttribute)t.GetCustomAttribute(typeof(DefaultEditorSystemAttribute))!;
             bool isActive = attribute.StartActive;
 
+            AddSystem(t, isActive);
+        }
+
+        // Start with all the editor systems enabled by default.
+        foreach (Type t in ReflectionHelper.GetAllTypesWithAttributeDefinedOfType<EditorSystemAttribute>(typeof(ISystem)))
+        {
+            AddSystem(t, isActive: true);
+        }
+
+        Type[] targetAttributesForDisabledByDefault = [
+            typeof(StoryEditorAttribute),
+            typeof(DialogueEditorAttribute),
+            typeof(TileEditorAttribute),
+            typeof(PathfindEditorAttribute),
+            typeof(SoundEditorAttribute),
+            typeof(SpriteEditorAttribute),
+            typeof(PrefabEditorAttribute),
+            typeof(EditorSystemAttribute)];
+
+        foreach (Type tAttribute in targetAttributesForDisabledByDefault)
+        {
+            foreach (Type t in ReflectionHelper.GetAllTypesWithAttributeDefinedOfType(tAttribute, typeof(ISystem)))
+            {
+                AddSystem(t, isActive: false);
+            }
+        }
+
+        _cachedEditorSystems = systems;
+        return systems;
+    }
+
+    public static IList<(ISystem system, bool isActive)> FetchEditorSystems()
+    {
+        List<(Type, bool)> systems = FetchEditorTypeSystems();
+        List<(ISystem, bool)> result = [];
+
+        foreach ((Type t, bool enabled) in systems)
+        {
             if (Activator.CreateInstance(t) is ISystem system)
             {
-                systems.Add((system, isActive));
-                systemsAdded.Add(t);
+                result.Add((system, enabled));
             }
             else
             {
                 GameLogger.Error($"The {t} is not a valid system!");
             }
-        }
-
-        return systems;
-    }
-
-    /// <summary>
-    /// Cache a dictionary that maps attributes -> components that have that attribute.
-    /// This is used by <see cref="FetchComponentsWithAttribute"/>.
-    /// </summary>
-    private static readonly Dictionary<Type, Type[]> _componentsWithStoryCache = new();
-
-    public static Type[] FetchComponentsWithAttribute<T>(bool cache = true) where T : Attribute
-    {
-        if (_componentsWithStoryCache.TryGetValue(typeof(T), out Type[]? result))
-        {
-            return result;
-        }
-
-        result = ReflectionHelper.GetAllTypesWithAttributeDefinedOfType<T>(typeof(IComponent)).ToArray();
-        if (cache)
-        {
-            _componentsWithStoryCache[typeof(T)] = result;
         }
 
         return result;
@@ -346,6 +236,15 @@ internal static class StageHelpers
         return null;
     }
 
+    public static Vector2? GetSelectedEntityPosition()
+    {
+        if(GetSelectedEntity() is IEntity entity && entity.HasComponent(typeof(PositionComponent)))
+        {
+            return entity.GetComponent<PositionComponent>().ToVector2();
+        }
+
+        return null;
+    }
     public static IEntity? GetSelectedEntity()
     {
         if (Architect.Instance.ActiveScene is EditorScene editor && editor.EditorShown is AssetEditor assetEditor)
