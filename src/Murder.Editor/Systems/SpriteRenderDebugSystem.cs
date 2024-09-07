@@ -138,7 +138,7 @@ internal class SpriteRenderDebugSystem : IMurderRenderSystem, IGuiSystem
 
 
             bool showHandles = !previewMode &&
-                (hook.EditorMode == EditorHook.EditorModes.EditMode && hook.IsEntitySelectedOrParent(e));
+                (hook.EditorMode == EditorHook.EditorModes.EditMode && hook.IsEntitySelectedOrParent(e) && hook.StageSettings.HasFlag(Assets.StageSetting.ShowSprite));
 
             if (showHandles && hook.CursorWorldPosition is Point cursorPosition)
             {
@@ -217,20 +217,31 @@ internal class SpriteRenderDebugSystem : IMurderRenderSystem, IGuiSystem
                 rotation += RotationComponent.Rotation;
             }
 
-            if (sprite.HasValue && e.TryGetFacing() is FacingComponent facing)
+            if (e.TryGetFacing() is FacingComponent facing)
             {
-                if (sprite.Value.RotateWithFacing)
-                    rotation += facing.Angle;
-
-                if (sprite.Value.FlipWithFacing)
+                SpriteFacingComponent? spriteFacing = e.TryGetSpriteFacing();
+                if (sprite.HasValue)
                 {
-                    flip = facing.Direction.GetFlippedHorizontal();
+                    if (sprite.Value.RotateWithFacing)
+                    {
+                        rotation += facing.Angle;
+                    }
+
+                    if (sprite.Value.FlipWithFacing)
+                    {
+                        flip = facing.Direction.GetFlippedHorizontal();
+                    }
+
+                    if (spriteFacing is not null)
+                    {
+                        (animationId, var horizontalFlip) = spriteFacing.Value.GetSuffixFromAngle(facing.Angle);
+                        flip = horizontalFlip ? ImageFlip.Horizontal : ImageFlip.None;
+                    }
                 }
-
-                if (e.TryGetSpriteFacing() is SpriteFacingComponent spriteFacing)
+                else if (spriteFacing is not null && overload is not null && !overload.Value.IgnoreFacing)
                 {
-                    (animationId, var horizontalFlip)= spriteFacing.GetSuffixFromAngle(facing.Angle);
-                    flip = horizontalFlip ? ImageFlip.Horizontal : ImageFlip.None;
+                    (string suffix, bool horizontalFlip) = spriteFacing.Value.GetSuffixFromAngle(facing.Angle);
+                    animationId += $"_{suffix}";
                 }
             }
 

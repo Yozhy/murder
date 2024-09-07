@@ -17,7 +17,7 @@ namespace Murder.Editor.CustomComponents
     {
         private static string _eventInput = string.Empty;
 
-        protected override bool DrawAllMembersWithTable(ref object target, bool _)
+        protected override bool DrawAllMembersWithTable(ref object target)
         {
             bool fileChanged = false;
 
@@ -61,7 +61,6 @@ namespace Murder.Editor.CustomComponents
             // ======
             // Add new event.
             // ======
-            ImGui.SameLine();
             string addEventPopupId = "popup_add_event_sprite";
             if (ImGuiHelpers.IconButton('\uf055', "add_events"))
             {

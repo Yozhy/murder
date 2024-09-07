@@ -134,10 +134,11 @@ namespace Murder.Editor.Systems
                 }
 
                 Guid spriteGuid = Guid.Empty;
-                if (SearchBox.SearchAsset(ref spriteGuid, typeof(SpriteAsset), SearchBoxFlags.None, null, "Add Unique Prop"))
+                if (SearchBox.SearchAsset(ref spriteGuid, typeof(SpriteAsset), SearchBoxFlags.None, null, "Add unique prop"))
                 {
                     Point cursorWorldPosition = hook.LastCursorWorldPosition;
                     string? targetGroup = EditorTileServices.FindTargetGroup(world, hook, cursorWorldPosition);
+                    SpriteAsset? sprite = Game.Data.TryGetAsset<SpriteAsset>(spriteGuid);
 
                     hook.AddEntityWithStage?.Invoke(
                         [
@@ -145,10 +146,23 @@ namespace Murder.Editor.Systems
                             new SpriteComponent(spriteGuid),
                         ],
                         targetGroup,
-                        /* name */ null);
+                        sprite?.Name);
 
                     ImGui.CloseCurrentPopup();
                 }
+
+                ImGui.Separator();
+
+                if (SearchBox.SearchComponentType(initialText: "Toggle component") is Type tComponentToFilter)
+                {
+                    ImmutableArray<Entity> entities = world.GetActivatedAndDeactivatedEntitiesWith(tComponentToFilter);
+                    foreach (Entity e in entities)
+                    {
+                        hook.ToggleEntityWithStage?.Invoke(e.EntityId, !e.IsActive);
+                    }
+                }
+
+                ImGuiHelpers.HelpTooltip("Toggle activate or deactivate entities with this component");
 
                 ImGui.EndPopup();
             }

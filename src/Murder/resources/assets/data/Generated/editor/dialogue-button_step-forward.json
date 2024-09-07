@@ -1,26 +1,6 @@
 {
   "$type": "Murder.Assets.Graphics.SpriteAsset",
   "Animations": {
-    "disabled": {
-      "Frames": [
-        3
-      ],
-      "FramesDuration": [
-        100
-      ],
-      "Events": {},
-      "AnimationDuration": 0.1
-    },
-    "normal": {
-      "Frames": [
-        0
-      ],
-      "FramesDuration": [
-        100
-      ],
-      "Events": {},
-      "AnimationDuration": 0.1
-    },
     "down": {
       "Frames": [
         2
@@ -31,9 +11,9 @@
       "Events": {},
       "AnimationDuration": 0.1
     },
-    "hover": {
+    "normal": {
       "Frames": [
-        1
+        0
       ],
       "FramesDuration": [
         100
@@ -56,6 +36,26 @@
       ],
       "Events": {},
       "AnimationDuration": 0.4
+    },
+    "disabled": {
+      "Frames": [
+        3
+      ],
+      "FramesDuration": [
+        100
+      ],
+      "Events": {},
+      "AnimationDuration": 0.1
+    },
+    "hover": {
+      "Frames": [
+        1
+      ],
+      "FramesDuration": [
+        100
+      ],
+      "Events": {},
+      "AnimationDuration": 0.1
     }
   },
   "Atlas": 2,

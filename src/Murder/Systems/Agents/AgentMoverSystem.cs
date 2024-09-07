@@ -6,6 +6,7 @@ using Murder.Components.Agents;
 using Murder.Core;
 using Murder.Utilities;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Numerics;
 
 namespace Murder.Systems
@@ -14,7 +15,7 @@ namespace Murder.Systems
     /// System that looks for AgentImpulse systems and translated them into 'Velocity' for the physics system.
     /// </summary>
     [Filter(typeof(AgentComponent), typeof(AgentImpulseComponent))]
-    [Filter(ContextAccessorFilter.NoneOf, typeof(DisableAgentComponent))]
+    [Filter(ContextAccessorFilter.NoneOf, typeof(DisableAgentComponent), typeof(AgentPauseComponent))]
     internal class AgentMoverSystem : IUpdateSystem
     {
         public void Update(Context context)
@@ -29,8 +30,10 @@ namespace Murder.Systems
                 var agent = e.GetAgent();
                 var impulse = e.GetAgentImpulse();
 
-                if (!e.HasStrafing() && impulse.Direction != null)
+                if (!e.HasStrafing() && impulse.Direction != null && !impulse.Flags.HasFlag(AgentImpulseFlags.IgnoreFacing))
+                {
                     e.SetFacing(impulse.Impulse.Angle());
+                }
 
                 if (!impulse.Impulse.HasValue())
                     continue;

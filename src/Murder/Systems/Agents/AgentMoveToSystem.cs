@@ -13,12 +13,20 @@ namespace Murder.Systems.Agents
     /// </summary>
     [Filter(typeof(ITransformComponent))]
     [Filter(ContextAccessorFilter.AnyOf, typeof(MoveToComponent), typeof(MoveToTargetComponent))]
+    [Filter(ContextAccessorFilter.NoneOf, typeof(AgentPauseComponent))]
     public class AgentMoveToSystem : IFixedUpdateSystem
     {
         public void FixedUpdate(Context context)
         {
             foreach (Entity e in context.Entities)
             {
+                if (e.TryGetMoveToMaxTime() is MoveToMaxTimeComponent moveToMaxTime &&
+                    Game.Now > moveToMaxTime.RemoveAt)
+                {
+                    e.RemoveMoveTo();
+                    e.RemoveMoveToTarget();
+                }
+
                 IMurderTransformComponent position = e.GetGlobalTransform();
                 
                 if (e.TryGetMoveTo() is MoveToComponent move)
@@ -37,7 +45,11 @@ namespace Murder.Systems.Agents
                         // Start slowing down
                         var distance = MathF.Sqrt(distanceSq);
                         var ratio = Calculator.Remap(distance, move.MinDistance, move.SlowDownDistance, 0.5f, 1);
-                        e.SetAgentImpulse(delta.Normalized() * ratio);
+
+                        AgentImpulseFlags flags = distanceSq < (MathF.Pow(move.SlowDownDistance, 2) / 4f) ?
+                            AgentImpulseFlags.IgnoreFacing : AgentImpulseFlags.None;
+
+                        e.SetAgentImpulse(delta.Normalized() * ratio, flags);
                     }
                     else
                     {

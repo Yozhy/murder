@@ -104,9 +104,9 @@ namespace Murder.Editor.ImGuiExtended
         public static Type? SearchComponent(IEnumerable<IComponent>? excludeComponents = default, IComponent? initialValue = default) =>
             SearchComponentType(excludeComponents, initialValue?.GetType());
 
-        public static Type? SearchComponentType(IEnumerable<IComponent>? excludeComponents = default, Type? t = default)
+        public static Type? SearchComponentType(IEnumerable<IComponent>? excludeComponents = default, Type? t = default, string? initialText = null)
         {
-            SearchBoxSettings<Type> settings = new(initialText: "Select a component");
+            SearchBoxSettings<Type> settings = new(initialText: initialText ?? "Select a component");
 
             if (t is not null)
             {
@@ -121,7 +121,7 @@ namespace Murder.Editor.ImGuiExtended
 
                 Dictionary<string, Type> result = CollectionHelper.ToStringDictionary(types, t => t.Name, t => t);
 
-                AssetsFilter.FetchStateMachines(result, excludeComponents);
+                AssetsFilter.FetchStateMachines(result, subtypeOf: null, excludeComponents);
                 AssetsFilter.FetchInteractions(result, excludeComponents);
 
                 return result;
@@ -160,7 +160,7 @@ namespace Murder.Editor.ImGuiExtended
             return default;
         }
 
-        public static bool SearchStateMachines(Type? initialValue, out Type? chosen)
+        public static bool SearchStateMachines(Type? initialValue, out Type? chosen, Type? subtypeOf = null)
         {
             SearchBoxSettings<Type> settings = new(initialText: "Select a state machine");
 
@@ -173,7 +173,7 @@ namespace Murder.Editor.ImGuiExtended
             Lazy<Dictionary<string, Type>> candidates = new(() =>
             {
                 Dictionary<string, Type> result = new();
-                AssetsFilter.FetchStateMachines(result, excludeComponents: null);
+                AssetsFilter.FetchStateMachines(result, subtypeOf, excludeComponents: null);
 
                 return result;
             });
@@ -273,7 +273,7 @@ namespace Murder.Editor.ImGuiExtended
             return default;
         }
 
-        public static Fact? SearchFacts(string id, Fact? current)
+        public static Fact? SearchFacts(string id, Fact? current, BlackboardKind kind = BlackboardKind.All)
         {
             SearchBoxSettings<Fact> settings = new(initialText: "Select fact");
 
@@ -282,7 +282,7 @@ namespace Murder.Editor.ImGuiExtended
                 settings.InitialSelected = new(current.Value.EditorName, current.Value);
             }
 
-            Lazy<Dictionary<string, Fact>> candidates = new(AssetsFilter.GetAllFactsFromBlackboards);
+            Lazy<Dictionary<string, Fact>> candidates = new(() => AssetsFilter.GetAllFactsFromBlackboards(kind));
 
             if (Search(id: $"{id}_s_", settings, values: candidates, SearchBoxFlags.None, out Fact chosen))
             {
@@ -505,10 +505,11 @@ namespace Murder.Editor.ImGuiExtended
                 {
                     clicked = ImGuiHelpers.IconButton('\uf055', $"search_{id}");
                     ImGui.SameLine();
-                    ImGui.PushStyleColor(ImGuiCol.Text, Game.Profile.Theme.Faded);
+                    ImGui.PushStyleColor(ImGuiCol.Text, Game.Profile.Theme.Accent);
                 }
 
-                ImGui.PushStyleColor(ImGuiCol.Header, Game.Profile.Theme.BgFaded);
+                ImGui.PushStyleColor(ImGuiCol.Header, Game.Profile.Theme.Bg);
+                ImGui.PushStyleColor(ImGuiCol.HeaderHovered, Game.Profile.Theme.Faded);
 
                 string selectedName = settings.InitialText;
 
@@ -516,7 +517,7 @@ namespace Murder.Editor.ImGuiExtended
                 Vector2 size = new(_searchBoxWidth != -1 ? _searchBoxWidth : ImGui.GetContentRegionAvail().X - padding, ImGui.CalcTextSize(selectedName).Y);
                 if (!flags.HasFlag(SearchBoxFlags.IconOnly))
                 {
-                    if (ImGui.Selectable(selectedName, true, ImGuiSelectableFlags.DontClosePopups, size))
+                    if (ImGui.Selectable(selectedName, true, ImGuiSelectableFlags.NoAutoClosePopups, size))
                     {
                         clicked = true;
                     }
@@ -527,7 +528,7 @@ namespace Murder.Editor.ImGuiExtended
                     _tempSearchText = string.Empty;
                     _searchBoxSelection = 0;
                 }
-                ImGui.PopStyleColor(2);
+                ImGui.PopStyleColor(3);
 
                 if (ImGui.IsItemHovered() && settings.HasInitialValue)
                 {

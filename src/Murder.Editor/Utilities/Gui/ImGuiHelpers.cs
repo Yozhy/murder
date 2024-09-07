@@ -447,6 +447,7 @@ public static class ImGuiHelpers
 
     public static bool DrawEnumFieldAsFlagList(string id, string emptyText, Type enumType, ref int intValue)
         => DrawEnumFieldAsFlagList(id, emptyText, null, enumType, ref intValue);
+
     public static bool DrawEnumFieldAsFlagList(string id, string? emptyText, string? allText, Type enumType, ref int intValue)
     {
         bool modified = false;
@@ -489,8 +490,8 @@ public static class ImGuiHelpers
             Array values = Enum.GetValues(enumType);
             string[] prettyNames = Enum.GetNames(enumType);
 
-
             bool comboOpen = false;
+
             // Find the right index (tentatively).
             if (isSingleValue)
             {
@@ -500,7 +501,6 @@ public static class ImGuiHelpers
                 foreach (var value in values)
                 {
                     int v = Convert.ToInt32(value);
-
                     if (v == intValue)
                     {
                         result = index;
@@ -564,7 +564,7 @@ public static class ImGuiHelpers
                     bool changed = false;
                     changed |= ImGui.Checkbox($"##{id}-{i}-layer", ref isChecked);
                     ImGui.SameLine();
-                    if (ImGui.Selectable(prettyNames[i], isChecked, ImGuiSelectableFlags.DontClosePopups))
+                    if (ImGui.Selectable(prettyNames[i], isChecked, ImGuiSelectableFlags.NoAutoClosePopups))
                     {
                         changed = true;
                         isChecked = !isChecked;
@@ -596,10 +596,10 @@ public static class ImGuiHelpers
 
         return modified;
     }
-    public static bool DrawEnumFieldAsFlags(string id, Type enumType, ref int intValue)
+    public static bool DrawEnumFieldAsFlags(string id, Type enumType, ref int intValue, int width = -1)
     {
         using TableMultipleColumns table = new($"##{id}-col-table",
-            flags: ImGuiTableFlags.SizingFixedFit, -1, -1, -1);
+            flags: ImGuiTableFlags.SizingFixedFit, width, width, width);
 
         ImGui.TableNextRow();
         ImGui.TableNextColumn();

@@ -267,13 +267,13 @@ namespace Murder.Editor
             ImGui.PushStyleColor(ImGuiCol.Text, Game.Profile.Theme.White);
 
             bool shouldOpenPopUp = false;
-            if (ImGui.BeginPopupContextItem($"context_create_{type.Name}"))
+            if (ImGui.BeginPopupContextItem($"context_create_{type.Name}_{folderPath})"))
             {
                 string name = type == typeof(GameAsset) ?
                     "asset (pick one!)" :
                     Prettify.FormatAssetName(type.Name);
 
-                if (ImGui.Selectable($"Create new {name}"))
+                if (ImGui.Selectable($"Create new {name}{(string.IsNullOrEmpty(folderPath) ? "" : $" at {folderPath}")}")) 
                 {
                     shouldOpenPopUp = true;
                 }
@@ -361,13 +361,13 @@ namespace Murder.Editor
                     ImGui.CloseCurrentPopup();
                 }
 
-                if (asset.CanBeRenamed && ImGui.Selectable("Rename", false, ImGuiSelectableFlags.DontClosePopups))
+                if (asset.CanBeRenamed && ImGui.Selectable("Rename", false, ImGuiSelectableFlags.NoAutoClosePopups))
                 {
                     _newAssetName = asset.Name;
                     ImGui.OpenPopup("Asset Name");
                 }
 
-                if (asset.CanBeDeleted && ImGui.Selectable("Delete", false, ImGuiSelectableFlags.DontClosePopups))
+                if (asset.CanBeDeleted && ImGui.Selectable("Delete", false, ImGuiSelectableFlags.NoAutoClosePopups))
                 {
                     ImGui.OpenPopup("Delete?");
                 }

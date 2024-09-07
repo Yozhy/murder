@@ -32,7 +32,7 @@ namespace Murder.Save
         private readonly Dictionary<Guid, ImmutableDictionary<string, BlackboardInfo>> _characterBlackboards = [];
 
         [Serialize]
-        private readonly ComplexDictionary<(Guid Character, int SituationId, int DialogId), int> _dialogCounter = [];
+        private readonly ComplexDictionary<(Guid Character, string SituationId, int DialogId), int> _dialogCounter = [];
 
         private BlackboardInfo? DefaultBlackboard => _defaultBlackboard ??= _defaultBlackboardName is null ?
             null : _blackboards?.GetValueOrDefault(_defaultBlackboardName);
@@ -68,7 +68,7 @@ namespace Murder.Save
             {
                 if (Game.Data.TryGetAsset<CharacterAsset>(guid) is not CharacterAsset asset)
                 {
-                    GameLogger.Error("Unable to find character asset!");
+                    GameLogger.Error($"Unable to find character asset of {guid}.");
                     return null;
                 }
 
@@ -123,7 +123,7 @@ namespace Murder.Save
         /// <summary>
         /// Track that a particular dialog option has been played.
         /// </summary>
-        public virtual void Track(Guid character, int situationId, int dialogId)
+        public virtual void Track(Guid character, string situationId, int dialogId)
         {
             var index = (character, situationId, dialogId);
 
@@ -138,7 +138,7 @@ namespace Murder.Save
         /// <summary>
         /// Returns whether a particular dialog option has been played.
         /// </summary>
-        public bool HasPlayed(Guid guid, int situationId, int dialogId)
+        public bool HasPlayed(Guid guid, string situationId, int dialogId)
         {
             return _dialogCounter.ContainsKey((guid, situationId, dialogId));
         }
@@ -146,7 +146,7 @@ namespace Murder.Save
         /// <summary>
         /// Returns whether how many times a dialog has been executed.
         /// </summary>
-        public int PlayCount(Guid guid, int situationId, int dialogId)
+        public int PlayCount(Guid guid, string situationId, int dialogId)
         {
             if (_dialogCounter.TryGetValue((guid, situationId, dialogId), out int count))
             {
@@ -410,6 +410,16 @@ namespace Murder.Save
             return resultAsT;
         }
 
+        public T? GetValue<T>(string? name, string fieldName, Guid? character = null) where T : notnull
+        {
+            if (FindBlackboard(name, character) is not BlackboardInfo info)
+            {
+                return default;
+            }
+
+            return GetValue<T>(info, fieldName);
+        }
+
         public void SetValue<T>(string? name, string fieldName, T value, Guid? character = null) where T : notnull
         {
             if (FindBlackboard(name, character) is not BlackboardInfo info)
@@ -576,7 +586,7 @@ namespace Murder.Save
         /// <param name="world">World.</param>
         /// <param name="entityId">Entity which will be used to check for components requirements.</param>
         /// <param name="weight">The weight of this match. Zero if there is a no match.</param>
-        public bool Matches(Criterion criterion, Guid? character, World world, int? entityId, out int weight)
+        public bool Matches(Criterion criterion, Guid? character, World? world, int? entityId, out int weight)
         {
             weight = 1;
 
@@ -673,6 +683,7 @@ namespace Murder.Save
                 case FactKind.Component:
                     if (criterion.Fact.ComponentType is Type componentTarget &&
                         entityId is not null &&
+                        world is not null &&
                         world.TryGetEntity(entityId.Value) is Entity target)
                     {
                         bool hasComponent = target.HasComponent(componentTarget);
@@ -683,7 +694,7 @@ namespace Murder.Save
 
                 default:
                     object value = GetValue<object>(info, fieldName: criterion.Fact.Name);
-                    object? criterionValue = criterion.Value;
+                    object? criterionValue = criterion.IntValue;
 
                     if (value is Enum)
                     {

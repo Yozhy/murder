@@ -80,10 +80,12 @@ namespace Murder.Editor.ImGuiExtended
                 config->MergeMode = 1;
                 config->GlyphMinAdvanceX = 14;
 
-                io.Fonts.AddFontDefault(config);
-                var ranges = new ushort[] { Fonts.FontAwesomeIconRangeStart, Fonts.FontAwesomeIconRangeEnd, 0 };
+                // ImGuiFreeTypeBuilderFlags_LoadColor = 1 << 8
+                config->FontBuilderFlags |= 1 << 8;
 
-                fixed (ushort* rangesPtr = ranges)
+                io.Fonts.AddFontDefault(config);
+                
+                fixed (ushort* rangesPtr = Fonts.IconRanges)
                 {
                     ImFontPtr? AddFont(string fontName, float size, ImFontConfigPtr fontConfigPtr, IntPtr r)
                     {
@@ -98,9 +100,14 @@ namespace Murder.Editor.ImGuiExtended
                     }
                     
                     AddFont("fa-regular-400.otf", 12, config,(IntPtr)rangesPtr);
-                    AddFont("fa-solid-400.otf", 12, config, (IntPtr)rangesPtr);
-                    Fonts.LargeIcons = AddFont("fa-solid-400.otf", 18, IntPtr.Zero, (IntPtr)rangesPtr)!.Value;
-                    Fonts.TitleFont = AddFont("fa-regular-400.otf", 14, IntPtr.Zero, io.Fonts.GetGlyphRangesDefault())!.Value;
+                    AddFont("fa-solid-400.otf", 12, config,(IntPtr)rangesPtr);
+
+                    var configIcons = ImGuiNative.ImFontConfig_ImFontConfig();
+                    configIcons->GlyphMinAdvanceX = 14;
+                    configIcons->FontBuilderFlags |= 1 << 8;
+
+                    Fonts.LargeIcons = AddFont("fa-solid-400.otf", 18, configIcons, (IntPtr)rangesPtr)!.Value;
+                    Fonts.TitleFont = AddFont("fa-solid-400.otf", 14, IntPtr.Zero, io.Fonts.GetGlyphRangesDefault())!.Value;
                 }
 
                 ImGuiNative.ImFontConfig_destroy(config);

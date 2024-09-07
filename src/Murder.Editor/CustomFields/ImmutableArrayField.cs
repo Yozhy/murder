@@ -1,8 +1,6 @@
 ﻿using ImGuiNET;
-using Murder.Diagnostics;
 using Murder.Editor.ImGuiExtended;
 using Murder.Editor.Reflection;
-using Murder.Prefabs;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 
@@ -158,13 +156,15 @@ namespace Murder.Editor.CustomFields
 
         protected virtual bool DrawElement(ref T? element, EditorMember member, int index)
         {
+            bool modified = false;
+
             if (DrawValue(member.CreateFrom(typeof(T), "Value", element: default), element, out T? modifiedValue))
             {
                 element = modifiedValue;
-                return true;
+                modified = true;
             }
 
-            return false;
+            return modified;
         }
     }
 }

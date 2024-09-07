@@ -52,7 +52,7 @@ namespace Murder.Components
         public readonly int AnimationCount => _animationId.Length;
         public bool AtLast => Current == _animationId.Length - 1;
 
-        public readonly float SortOffset = 0f;
+        public readonly float SortOffset { get; init; } = 0f;
 
         public SpriteAsset? CustomSprite
         {
@@ -67,51 +67,65 @@ namespace Murder.Components
 
         public AnimationOverloadComponent() { }
 
-        public AnimationOverloadComponent(string animationId, bool loop, bool ignoreFacing) : this(animationId, -1, loop, ignoreFacing)
+        public AnimationOverloadComponent(string animationId, bool loop, bool ignoreFacing) : this(animationId, duration: -1, loop, ignoreFacing, Game.Now, Guid.Empty)
         { }
 
-        public AnimationOverloadComponent(string animationId, bool loop, bool ignoreFacing, float startTime) : this(animationId, -1, loop, ignoreFacing, startTime)
+        public AnimationOverloadComponent(string animationId, bool loop, bool ignoreFacing, Guid customSprite) : this(animationId, duration: -1, loop, ignoreFacing, Game.Now, customSprite)
+        { }
+
+        public AnimationOverloadComponent(ImmutableArray<string> animationId, bool loop, bool ignoreFacing) : this(animationId, duration: -1, loop, ignoreFacing, Game.Now, Guid.Empty)
+        { }
+
+        public AnimationOverloadComponent(string animationId, bool loop, bool ignoreFacing, float startTime) : this(animationId, duration: -1, loop, ignoreFacing, startTime, Guid.Empty)
         { }
 
         public AnimationOverloadComponent(string animationId, float duration, bool loop, bool ignoreFacing, int current, float sortOffset, Guid customSprite) :
-            this(ImmutableArray.Create(animationId), duration, loop, ignoreFacing, current, sortOffset, customSprite)
+            this([animationId], duration, loop, ignoreFacing, current, sortOffset, customSprite, Game.Now)
+        { }
+
+        public AnimationOverloadComponent(ImmutableArray<string> animations, float duration, bool loop, bool ignoreFacing, int current, float sortOffset, Guid customSprite) :
+            this(animations, duration, loop, ignoreFacing, current, sortOffset, customSprite, Game.Now)
+        { }
+
+        public AnimationOverloadComponent(string animationId, float duration, bool loop, bool ignoreFacing, float startTime, Guid customSprite)
+            : this([animationId], duration, loop, ignoreFacing, startTime, customSprite)
+        { }
+
+        public AnimationOverloadComponent(string animationId, float duration, bool loop, bool ignoreFacing)
+            : this(animationId, duration, loop, ignoreFacing, Game.Now, customSprite: Guid.Empty)
+        { }
+
+        public AnimationOverloadComponent(string animationId, Guid customSprite, float start, bool loop, bool ignoreFacing) :
+            this([animationId], customSprite, start, loop, ignoreFacing)
         { }
 
         public AnimationOverloadComponent(ImmutableArray<string> animations, float duration, bool loop, bool ignoreFacing, int current, float sortOffset, Guid customSprite, float start)
         {
             _animationId = animations;
-            Duration = duration;
-            Loop = loop;
-            IgnoreFacing = ignoreFacing;
-            Start = start;
-            Current = current;
             _customSprite = customSprite;
-            SortOffset = sortOffset;
-        }
-        public AnimationOverloadComponent(ImmutableArray<string> animations, float duration, bool loop, bool ignoreFacing, int current, float sortOffset, Guid customSprite) :
-            this(animations, duration, loop, ignoreFacing, current, sortOffset, customSprite, Game.Now)
-        { }
 
-        public AnimationOverloadComponent(string animationId, float duration, bool loop, bool ignoreFacing, float startTime)
-        {
-            _animationId = [animationId];
-            Duration = duration;
+            Start = start;
             Loop = loop;
             IgnoreFacing = ignoreFacing;
+            Current = current;
+            SortOffset = sortOffset;
+
+            Duration = duration;
+        }
+
+        public AnimationOverloadComponent(ImmutableArray<string> animationId, float duration, bool loop, bool ignoreFacing, float startTime, Guid customSprite)
+        {
+            _animationId = animationId;
+            _customSprite = customSprite;
 
             Start = startTime;
-            _customSprite = Guid.Empty;
-        }
-            
-        public AnimationOverloadComponent(string animationId, float duration, bool loop, bool ignoreFacing) : this(animationId, duration, loop, ignoreFacing, Game.Now)
-        {
+            Loop = loop;
+            Duration = duration;
+
+            IgnoreFacing = ignoreFacing;
         }
 
-        public AnimationOverloadComponent(string animationId, Guid customSprite, float start, bool loop, bool ignoreFacing) :
-            this(ImmutableArray.Create(animationId), customSprite, start, loop, ignoreFacing)
-        { }
-
-        public AnimationOverloadComponent(ImmutableArray<string> animationId, Guid customSprite, float start, bool loop, bool ignoreFacing) : this()
+        public AnimationOverloadComponent(ImmutableArray<string> animationId, Guid customSprite, float start, bool loop, bool ignoreFacing)
         {
             _animationId = animationId;
             _customSprite = customSprite;

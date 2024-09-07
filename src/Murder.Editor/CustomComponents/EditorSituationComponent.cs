@@ -1,21 +1,18 @@
-﻿using Bang.Interactions;
-using ImGuiNET;
+﻿using ImGuiNET;
+using Murder.Attributes;
 using Murder.Components;
-using Murder.Core.Dialogs;
 using Murder.Editor.Attributes;
 using Murder.Editor.CustomFields;
 using Murder.Editor.ImGuiExtended;
 using Murder.Editor.Reflection;
 using Murder.Editor.Utilities;
-using Murder.Interactions;
-using System.Collections.Immutable;
 
 namespace Murder.Editor.CustomComponents
 {
     [CustomComponentOf(typeof(SituationComponent))]
     public class EditorSituationComponent : CustomComponent
     {
-        protected override bool DrawAllMembersWithTable(ref object target, bool _)
+        protected override bool DrawAllMembersWithTable(ref object target)
         {
             if (target is not SituationComponent situation)
             {
@@ -23,8 +20,9 @@ namespace Murder.Editor.CustomComponents
             }
 
             bool modified = false;
+
             if (SituationComponentField.DrawSituationField(
-                    situation.Character, situation.Situation, out int result))
+                    situation.Character, situation.Situation, showFirstLinePreview: false, out string result))
             {
                 EditorMember situationField = typeof(SituationComponent).
                     TryGetFieldForEditor(nameof(SituationComponent.Situation))!;
@@ -39,7 +37,7 @@ namespace Murder.Editor.CustomComponents
 
             modified |= DrawAllMembers(
                 target,
-                exceptForMembers: new HashSet<string>() { nameof(SituationComponent.Situation) });
+                exceptForMembers: [nameof(SituationComponent.Situation)]);
 
             return modified;
         }

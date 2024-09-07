@@ -32,6 +32,8 @@ namespace Murder.Editor
         private bool _isLoadingContent = true;
         int _changingScenesLock = 3;
 
+        public Guid CurrentSelectedAsset => _selectedTab;
+
         public EditorScene()
         {
             _explorerPages = CreateExplorerPages();
@@ -240,8 +242,8 @@ namespace Murder.Editor
                     }
                     ImGui.EndChild();
 
-                    Vector2 min = ImGui.GetItemRectMin();
-                    Vector2 size = ImGui.GetContentRegionMax() - min;
+                    Vector2 min = ImGui.GetWindowPos();
+                    Vector2 size = ImGui.GetWindowSize();
                     Vector2 pixelSize = new Vector2(96, 80);
                     float ratio = Math.Clamp(Math.Min((size.X / pixelSize.X), (size.Y / pixelSize.Y)), 1, 2);
                     Vector2 finalSize = pixelSize * ratio;

@@ -23,8 +23,52 @@ public enum Direction
     UpRight
 }
 
+[Flags]
+public enum DirectionFlags
+{
+    Right = 0x1,
+    Down = 0x10,
+    Left = 0x100,
+    Up = 0x1000
+}
+
 public static class DirectionHelper
 {
+    public static DirectionFlags ToDirectionFlag(this Direction direction)
+    {
+        switch (direction)
+        {
+            case Direction.UpRight:
+            case Direction.UpLeft:
+            case Direction.Up: 
+                return DirectionFlags.Up;
+
+            case Direction.Down: 
+            case Direction.DownLeft:
+            case Direction.DownRight: 
+                return DirectionFlags.Down;
+
+            case Direction.Left: 
+                return DirectionFlags.Left;
+
+            case Direction.Right:
+            default:
+                return DirectionFlags.Right;
+        }
+    }
+
+    public static bool IsDiagonal(this Direction direction)
+    {
+        return direction switch
+        {
+            Direction.UpRight => true,
+            Direction.UpLeft => true,
+            Direction.DownRight => true,
+            Direction.DownLeft => true,
+            _ => false,
+        };
+    }
+
     public static Direction RoundTo4Directions(this Direction direction, Orientation bias)
     {
         if (bias == Orientation.Horizontal)
@@ -209,6 +253,32 @@ public static class DirectionHelper
         float angle = MathF.Atan2(vector.Y, vector.X);
         int quadra = Calculator.RoundToInt(8 * angle / (2 * MathF.PI) + 8) % 8;
         return (Direction)quadra;
+    }
+
+    public static Direction FromVectorWithHorizontal(Vector2 vector)
+    {
+        // Check if the vector is pointing more to the left or right
+        if (vector.X < 0)
+        {
+            return Direction.Left;
+        }
+        else
+        {
+            return Direction.Right;
+        }
+    }
+
+    public static Direction FromVectorWithVertical(Vector2 vector)
+    { 
+        // Check if the vector is pointing more upward or downward
+        if (vector.Y < 0)
+        {
+            return Direction.Up;
+        }
+        else
+        {
+            return Direction.Down;
+        }
     }
 
     public static Vector2 ToVector(this Direction direction)

@@ -15,16 +15,16 @@ namespace Murder.Editor.CustomComponents;
 public enum CustomComponentsFlags
 {
     None = 0,
-    SkipSameLineForFilterField = 1 << 0, // The Filter Field on common components starts with ImGui.SameLine. This skips that
 }
 
 
 [CustomComponentOf(typeof(object), priority: -1)]
 public class CustomComponent
 {
-    private readonly Dictionary<string, string> _searchField = new();
-    private static readonly HashSet<string> _unfoldedFolders = new();
-    public static bool ShowEditorOf<T>(ref T target, CustomComponentsFlags flags = CustomComponentsFlags.None)
+    private readonly Dictionary<string, string> _searchField = [];
+    private static readonly HashSet<string> _unfoldedFolders = [];
+
+    public static bool ShowEditorOf<T>(ref T target, CustomComponentsFlags _ = CustomComponentsFlags.None)
     {
         if (target is null)
         {
@@ -35,7 +35,7 @@ public class CustomComponent
         if (CustomEditorsHelper.TryGetCustomComponent(target.GetType(), out var customFieldEditor))
         {
             object? boxed = target!;
-            if (customFieldEditor.DrawAllMembersWithTable(ref boxed, !flags.HasFlag(CustomComponentsFlags.SkipSameLineForFilterField)))
+            if (customFieldEditor.DrawAllMembersWithTable(ref boxed))
             {
                 target = (T)boxed!;
                 return true;
@@ -60,7 +60,7 @@ public class CustomComponent
 
         if (CustomEditorsHelper.TryGetCustomComponent(target.GetType(), out var customFieldEditor))
         {
-            return customFieldEditor.DrawAllMembersWithTable(ref target, true);
+            return customFieldEditor.DrawAllMembersWithTable(ref target);
         }
 
         GameLogger.Error(
@@ -76,7 +76,7 @@ public class CustomComponent
     /// <param name="target">The target object</param>
     /// <param name="sameLineFilter">Will draw the filter field on the same line, if available.</param>
     /// <returns></returns>
-    protected virtual bool DrawAllMembersWithTable(ref object target, bool sameLineFilter)
+    protected virtual bool DrawAllMembersWithTable(ref object target)
     {
         Type type = target.GetType();
         string name = type.Name;
@@ -104,11 +104,6 @@ public class CustomComponent
 
         if (!flags.HasFlag(EditorFieldFlags.NoFilter) && members.Count > 5) 
         {
-            if (sameLineFilter)
-            {
-                ImGui.SameLine();
-            }
-
             ImGui.BeginGroup();
 
 
@@ -117,11 +112,6 @@ public class CustomComponent
             {
                 ImGui.PushStyleColor(ImGuiCol.FrameBg, Game.Profile.Theme.Bg);
                 popColors++;
-            }
-
-            if (!sameLineFilter) // Why do we need this? I feel I am misunderstanding something from ImGui
-            {
-                ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 4);
             }
 
             ImGui.PushStyleColor(ImGuiCol.Button, Game.Profile.Theme.Bg);
@@ -137,11 +127,6 @@ public class CustomComponent
 
             // Draw the search field
             ImGui.PushItemWidth(-1);
-
-            if (!sameLineFilter) // Return the cursor bacck up
-            {
-                ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 4);
-            }
 
             if (ImGui.InputTextWithHint($"##search_field_{name}", "Filter...", ref filter, 256))
             {
@@ -268,17 +253,19 @@ public class CustomComponent
         bool unfolded = true;
         if (AttributeExtensions.IsDefined(member, typeof(FolderAttribute)))
         {
-            unfolded = _unfoldedFolders.Contains(memberName);
+            string id = $"{memberName}_{target.GetHashCode()}";
+
+            unfolded = _unfoldedFolders.Contains(id);
             ImGui.PushStyleColor(ImGuiCol.Text, unfolded ? Game.Profile.Theme.White: Game.Profile.Theme.Faded);
-            if (ImGui.Selectable($"{(unfolded ? "\uf07c" : "\uf07b")} {Prettify.FormatName(memberName)}{(unfolded ? ":" : "[...]")}", unfolded)) 
+            if (ImGui.Selectable($"{(unfolded ? "\uf07c" : "\uf07b")} {Prettify.FormatName(memberName)}{(unfolded ? ":" : "")}", unfolded)) 
             {
                 if (unfolded)
                 {
-                    _unfoldedFolders.Remove(memberName);
+                    _unfoldedFolders.Remove(id);
                 }
                 else
                 {
-                    _unfoldedFolders.Add(memberName);
+                    _unfoldedFolders.Add(id);
                 }
             }
 

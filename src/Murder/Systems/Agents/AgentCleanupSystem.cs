@@ -9,7 +9,7 @@ namespace Murder.Systems
 
     [Filter(typeof(AgentComponent))]
     [Filter(ContextAccessorFilter.AnyOf, typeof(VelocityComponent), typeof(AgentImpulseComponent))]
-    [Filter(ContextAccessorFilter.NoneOf, typeof(DisableAgentComponent))]
+    [Filter(ContextAccessorFilter.NoneOf, typeof(DisableAgentComponent), typeof(AgentPauseComponent))]
     internal class AgentCleanupSystem : IFixedUpdateSystem
     {
         public void FixedUpdate(Context context)
@@ -27,7 +27,7 @@ namespace Murder.Systems
                     e.SetFriction(agent.Friction);
                 }
 
-                if (impulse is not null && impulse.Value.Clear)
+                if (impulse is not null && !impulse.Value.Flags.HasFlag(AgentImpulseFlags.DoNotClear))
                 {
                     e.RemoveAgentImpulse();
                 }
