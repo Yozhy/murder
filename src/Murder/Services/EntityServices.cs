@@ -220,7 +220,6 @@ public static class EntityServices
 
     public static bool AnimationAvailable(this Entity entity, string id)
     {
-
         if (entity.TryGetAgentSprite() is AgentSpriteComponent agentSprite)
         {
             var sprite = Game.Data.TryGetAsset<SpriteAsset>(agentSprite.AnimationGuid);
@@ -232,7 +231,7 @@ public static class EntityServices
                 }
                 else if (entity.TryGetFacing() is FacingComponent facing)
                 {
-                    (string suffix, bool flip) = DirectionHelper.GetSuffixFromAngle(entity, agentSprite, facing.Angle);
+                    (string suffix, bool flip) = DirectionHelper.GetSuffixFromAngle(entity, id, facing.Angle);
                     if (sprite.Animations.ContainsKey($"{id}_{suffix}"))
                         return true;
                 }
@@ -484,13 +483,24 @@ public static class EntityServices
         int offset = 0,
         Guid? customSprite = null)
     {
+        PlayAnimationOverload(e, [animation], properties, offset, customSprite);
+    }
+
+    public static void PlayAnimationOverload(
+        this Entity e,
+        ImmutableArray<string> animations,
+        AnimationOverloadProperties properties = AnimationOverloadProperties.Loop | AnimationOverloadProperties.IgnoreFacing,
+        int offset = 0,
+        Guid? customSprite = null)
+    {
         AnimationOverloadComponent overload =
                     new AnimationOverloadComponent(
-                        animation, 
-                        loop: properties.HasFlag(AnimationOverloadProperties.Loop), 
+                        animations,
+                        loop: properties.HasFlag(AnimationOverloadProperties.Loop),
                         ignoreFacing: properties.HasFlag(AnimationOverloadProperties.IgnoreFacing),
                         customSprite: customSprite ?? Guid.Empty)
-                    with { SortOffset = offset };
+                    with
+                    { SortOffset = offset };
 
         e.SetAnimationOverload(overload);
     }

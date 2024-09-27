@@ -40,11 +40,6 @@ namespace Murder.Components
         /// </summary>
         public readonly string CurrentAnimation => NextAnimations.FirstOrDefault() ?? string.Empty;
 
-        /// <summary>
-        /// Legacy property for serialization. Do not use.
-        /// </summary>
-        public float AnimationStartedTime { set { } }
-
         public readonly ImmutableArray<string> NextAnimations { get; init; } = ImmutableArray<string>.Empty;
 
         public bool HasAnimation(string animationName)
@@ -70,6 +65,10 @@ namespace Murder.Components
 
         public SpriteComponent(Portrait portrait) :
             this(portrait.Sprite, Vector2.Zero, [portrait.AnimationId], 0, false, false, OutlineStyle.Full, Batches2D.GameplayBatchId)
+        { }
+
+        public SpriteComponent(Portrait portrait, int batchId, int yOffset) :
+            this(portrait.Sprite, Vector2.Zero, [portrait.AnimationId], yOffset, false, false, OutlineStyle.Full, batchId)
         { }
 
         public SpriteComponent(Guid guid, Vector2 offset, ImmutableArray<string> id, int ySortOffset, bool rotate, bool flip, OutlineStyle highlightStyle, int targetSpriteBatch)

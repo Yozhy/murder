@@ -578,7 +578,7 @@ namespace Murder.Core.Input
                 canceled = true;
             }
 
-            currentInfo.Select(selectedOptionIndex, lastMoved);
+            currentInfo.Select(selectedOptionIndex, lastPressed);
 
             currentInfo.Canceled = canceled;
             currentInfo.Overflow = overflow;

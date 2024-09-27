@@ -389,10 +389,10 @@ namespace Murder
 
             base.Initialize(); // Content is loaded here
 
+            _game?.Initialize();
+
             // Setting window size
             RefreshWindow();
-
-            _game?.Initialize();
 
             // Propagate dianostics mode settings.
             World.DIAGNOSTICS_MODE = DIAGNOSTICS_MODE;
@@ -410,7 +410,14 @@ namespace Murder
 
             _screenSize = new Point(Width, Height) * Data.GameProfile.GameScale;
 
-            SetWindowSize(_screenSize);
+            if (Fullscreen)
+            {
+                SetWindowSize(new Point(Game.GraphicsDevice.Adapter.CurrentDisplayMode.Width, Game.GraphicsDevice.Adapter.CurrentDisplayMode.Height), false);
+            }
+            else
+            {
+                SetWindowSize(_screenSize, false);
+            }
             _graphics.ApplyChanges();
 
             if (!Fullscreen)
@@ -426,11 +433,12 @@ namespace Murder
         /// Sets the window size for the game based on the specified screen size and full screen settings.
         /// </summary>
         /// <param name="screenSize">The desired screen size in pixels.</param>
+        /// <param name="remember">Whether we should persist this window size.</param>
         /// <remarks>
         /// In windowed mode, uses either the saved window size or the provided screen size.
         /// Synchronizes with vertical retrace in debug mode.
         /// </remarks>
-        public virtual void SetWindowSize(Point screenSize)
+        public virtual void SetWindowSize(Point screenSize, bool remember)
         {
             _graphics.SynchronizeWithVerticalRetrace = true;
             if (Fullscreen)
@@ -448,7 +456,7 @@ namespace Murder
                 _graphics.IsFullScreen = false;
                 Window.IsBorderlessEXT = false;
 
-                if (_windowedSize.X > 0 && _windowedSize.Y > 0)
+                if (remember && _windowedSize.X > 0 && _windowedSize.Y > 0)
                 {
                     _graphics.PreferredBackBufferWidth = (int)(_windowedSize.X);
                     _graphics.PreferredBackBufferHeight = (int)(_windowedSize.Y);
