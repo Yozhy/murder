@@ -1,6 +1,7 @@
 ﻿using Microsoft.Xna.Framework.Graphics;
 using Murder.Core.Geometry;
 using Murder.Diagnostics;
+using Murder.Serialization;
 using Murder.Services;
 using Murder.Utilities;
 using System.Diagnostics;
@@ -127,7 +128,12 @@ public class RenderContext : IDisposable
     protected readonly bool _useDebugBatches;
 
     private Rectangle? _takeScreenShot;
-    protected bool _takeGameplayScreenShot;
+
+    /// <summary>
+    /// Countdown of frames until next screenshot.
+    /// </summary>
+    protected int _takeGameplayScreenShot = -1;
+    public bool TakingScreenshot => _takeGameplayScreenShot > 0;
 
     private bool _initialized = false;
     public enum RenderTargets
@@ -458,10 +464,13 @@ public class RenderContext : IDisposable
         // =======================================================>
         _graphicsDevice.SetRenderTarget(null);
 
-        if (_takeGameplayScreenShot)
+        if (_takeGameplayScreenShot > 0)
         {
-            _takeGameplayScreenShot = false;
-            SaveScreenshot(_mainTarget, _mainTarget.Bounds.Size());
+            _takeGameplayScreenShot--;
+            if (_takeGameplayScreenShot == 0)
+            {
+                SaveScreenshot(_mainTarget, _mainTarget.Bounds.Size());
+            }
         }
 
         if (RenderToScreen)
@@ -506,36 +515,13 @@ public class RenderContext : IDisposable
         }
     }
 
-    protected static void SaveScreenshot(RenderTarget2D screenshot, Point size)
+    protected void SaveScreenshot(RenderTarget2D screenshot, Point size)
     {
         string fileName = $"screenshot-{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.png";
-        string filePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), fileName); // or any other directory you want to save in
+
+        string filePath = Path.Combine(FileHelper.GetScreenshotFolder(), fileName);
         var stream = File.OpenWrite(filePath);
         screenshot.SaveAsPng(stream, size.X, size.Y);
-
-        // Open the directory in the file explorer
-        if (OperatingSystem.IsWindows())
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "explorer.exe",
-                Arguments = $"/select,\"{filePath}\"",
-                UseShellExecute = true
-            }); 
-        }
-        else if (OperatingSystem.IsMacOS())
-        {
-            Process.Start("open", $"-R \"{filePath}\"");
-        }
-        else if (OperatingSystem.IsLinux())
-        {
-            Process.Start("xdg-open", Path.GetDirectoryName(filePath)!);
-        }
-        else
-        {
-            Console.WriteLine($"File saved at {filePath}. Open manually as the OS is not recognized.");
-        }
-
         stream.Close();
     }
 
@@ -630,6 +616,6 @@ public class RenderContext : IDisposable
 
     public void SaveGameplayScreenshot()
     {
-        _takeGameplayScreenShot = true;
+        _takeGameplayScreenShot = 2;
     }
 }
