@@ -1,4 +1,5 @@
-﻿using ImGuiNET;
+﻿using Bang.Components;
+using ImGuiNET;
 using Murder.Assets;
 using Murder.Assets.Localization;
 using Murder.Core.Dialogs;
@@ -8,11 +9,13 @@ using Murder.Diagnostics;
 using Murder.Editor.Attributes;
 using Murder.Editor.Components;
 using Murder.Editor.CustomComponents;
+using Murder.Editor.Data;
 using Murder.Editor.ImGuiExtended;
 using Murder.Editor.Reflection;
 using Murder.Editor.Stages;
 using Murder.Editor.Systems;
 using Murder.Editor.Utilities.Attributes;
+using System.Diagnostics;
 
 namespace Murder.Editor.CustomEditors
 {
@@ -260,6 +263,59 @@ namespace Murder.Editor.CustomEditors
             }
 
             ActiveEditors.Remove(target);
+        }
+
+        public override bool RunDiagnostics(Guid g)
+        {
+            CharacterAsset? script = Game.Data.TryGetAsset<CharacterAsset>(g);
+            if (script is null)
+            {
+                GameLogger.Warning($"Unable to retrieve asset {g}.");
+                return false;
+            }
+
+            bool foundIssue = false;
+
+            foreach ((string name, Situation situation) in script.Situations)
+            {
+                foreach (Dialog d in situation.Dialogs)
+                {
+                    if (d.Actions is not null)
+                    {
+                        for (int i = 0; i < d.Actions.Value.Length; ++i)
+                        {
+                            DialogAction action = d.Actions.Value[i];
+                            if (action.ComponentValue is null)
+                            {
+                                continue;
+                            }
+
+                            DialogueId id = new(name, d.Id, i);
+                            if (!script.Data.TryGetValue(id, out LineInfo info) || info.Component is null)
+                            {
+                                GameLogger.Error($"Found empty component at: {name}, {d.Id}.");
+                                foundIssue = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            bool hasAllDataInformation = true;
+            foreach ((DialogueId d, LineInfo info) in script.Data)
+            {
+                if (info.Portrait is null && info.Event is null && info.Component is null)
+                {
+                    hasAllDataInformation = false;
+                }
+            }
+
+            if (script.Data.Count == 0 || !hasAllDataInformation)
+            {
+                GameLogger.Warning($"There are no metadata information for {script.Name}. Is this expected?");
+            }
+
+            return !foundIssue;
         }
     }
 }

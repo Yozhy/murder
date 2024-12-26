@@ -68,7 +68,7 @@ public class EditorSettingsAsset : GameAsset
     public int Monitor = 0;
 
     [HideInEditor]
-    public Guid[] OpenedTabs = new Guid[0];
+    public Guid[] OpenedTabs = [];
 
     /// <summary>
     /// The asset currently being shown in the editor scene.
@@ -202,13 +202,10 @@ public class EditorSettingsAsset : GameAsset
     [Serialize, HideInEditor]
     public float? TestStartTime;
 
-    [JsonIgnore, HideInEditor]
-    public bool UseCustomCutscene = false;
-
-    [Serialize, HideInEditor]
-    public (Guid Entity, IStateMachineComponent? Component)? TestStartWithEntityAndComponent;
-
     public float DpiScale = 1f;
+
+    [Tooltip("Requires editor restart")]
+    public bool LockFramerate = false;
 
     public void FavoriteAsset(Guid guid)
     {

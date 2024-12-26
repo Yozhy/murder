@@ -15,35 +15,79 @@ namespace Murder.Systems;
 
 [Filter(typeof(ColliderComponent), typeof(ITransformComponent))]
 [Watch(typeof(ITransformComponent), typeof(ColliderComponent))]
-public class QuadtreeCalculatorSystem : IReactiveSystem
+public class QuadtreeCalculatorSystem : IReactiveSystem, IStartupSystem
 {
+    private readonly HashSet<int> _entitiesOnWatch = new(516);
+
     public void OnAdded(World world, ImmutableArray<Entity> entities)
     {
-        var qt = Quadtree.GetOrCreateUnique(world);
-        qt.AddToCollisionQuadTree(entities);
+        for (int i = 0; i < entities.Length; i++)
+        {
+            _entitiesOnWatch.Add(entities[i].EntityId);
+        }
     }
 
     public void OnRemoved(World world, ImmutableArray<Entity> entities)
     {
-        var qt = Quadtree.GetOrCreateUnique(world);
-        qt.RemoveFromCollisionQuadTree(entities);
+        for (int i = 0; i < entities.Length; i++)
+        {
+            _entitiesOnWatch.Add(entities[i].EntityId);
+        }
     }
 
     public void OnModified(World world, ImmutableArray<Entity> entities)
     {
-        var qt = Quadtree.GetOrCreateUnique(world);
-        qt.RemoveFromCollisionQuadTree(entities);
-        qt.AddToCollisionQuadTree(entities);
+        for (int i = 0; i < entities.Length; i++)
+        {
+            _entitiesOnWatch.Add(entities[i].EntityId);
+        }
     }
 
     public void OnActivated(World world, ImmutableArray<Entity> entities)
     {
-        var qt = Quadtree.GetOrCreateUnique(world);
-        qt.AddToCollisionQuadTree(entities);
+        for (int i = 0; i < entities.Length; i++)
+        {
+            _entitiesOnWatch.Add(entities[i].EntityId);
+        }
     }
     public void OnDeactivated(World world, ImmutableArray<Entity> entities)
     {
-        var qt = Quadtree.GetOrCreateUnique(world);
-        qt.RemoveFromCollisionQuadTree(entities);
+        for (int i = 0; i < entities.Length; i++)
+        {
+            _entitiesOnWatch.Add(entities[i].EntityId);
+        }
+    }
+
+    public void OnAfterTrigger(World world)
+    {
+        if (_entitiesOnWatch.Count == 0)
+        {
+            return;
+        }
+
+        Quadtree qt = Quadtree.GetOrCreateUnique(world);
+        foreach (int entityId in _entitiesOnWatch)
+        {
+            if (world.TryGetEntity(entityId) is Entity entity && entity.IsActive)
+            {
+                qt.RemoveFromCollisionQuadTree(entityId);
+                qt.AddToCollisionQuadTree(entity);
+            }
+            else
+            {
+                // This entity was removed from the world.
+                qt.RemoveFromCollisionQuadTree(entityId);
+            }
+        }
+
+        _entitiesOnWatch.Clear();
+    }
+
+    public void Start(Context context)
+    {
+        for (int i = 0; i < context.Entities.Length; i++)
+        {
+            _entitiesOnWatch.Add(context.Entities[i].EntityId);
+        }
     }
 }

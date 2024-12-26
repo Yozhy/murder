@@ -236,9 +236,9 @@ namespace Murder.Core.Input
             return _buttons[button].Released;
         }
 
-        public bool Pressed(Keys enter)
+        public bool Pressed(Keys key)
         {
-            return Keyboard.GetState().IsKeyDown(enter);
+            return Keyboard.GetState().IsKeyDown(key) && !_previousKeyboardState.IsKeyDown(key);
         }
 
         public bool PressedAndConsume(int button)
@@ -506,15 +506,19 @@ namespace Murder.Core.Input
         public bool GridMenu(ref MenuInfo currentInfo, int width, int _, int size, GridMenuFlags gridMenuFlags = GridMenuFlags.None)
         {
             if (currentInfo.Disabled)
+            {
                 return false;
+            }
 
-            var axis = GetAxis(MurderInputAxis.Ui);
+            VirtualAxis axis = GetAxis(MurderInputAxis.Ui);
             float lastMoved = currentInfo.LastMoved;
             float lastPressed = currentInfo.LastPressed;
 
             // Recalculate height based on the size.
             int height = Calculator.CeilToInt((float)size / width);
             int lastRowWidth = width - (width * height - size);
+
+            int lastSelection = currentInfo.Selection;
 
             int selectedOptionX = currentInfo.Selection % width;
             int selectedOptionY = Calculator.FloorToInt(currentInfo.Selection / width);
@@ -529,17 +533,20 @@ namespace Murder.Core.Input
                 {
                     overflow = 1;
                     if (gridMenuFlags.HasFlag(GridMenuFlags.ClampRight))
+                    {
                         selectedOptionX = currentWidth - 1;
+                    }
                 }
                 else if (selectedOptionX < 0)
                 {
                     overflow = -1;
                     if (gridMenuFlags.HasFlag(GridMenuFlags.ClampLeft))
+                    {
                         selectedOptionX = 0;
+                    }
                 }
 
                 selectedOptionX = Calculator.WrapAround(selectedOptionX, 0, currentWidth - 1);
-
                 lastMoved = Game.NowUnscaled;
             }
 
@@ -559,7 +566,6 @@ namespace Murder.Core.Input
                 }
 
                 selectedOptionY = Calculator.WrapAround(selectedOptionY, 0, currentHeight - 1);
-
                 lastMoved = Game.NowUnscaled;
             }
 
@@ -578,7 +584,28 @@ namespace Murder.Core.Input
                 canceled = true;
             }
 
-            currentInfo.Select(selectedOptionIndex, lastPressed);
+            currentInfo.Select(selectedOptionIndex, lastMoved);
+            bool isDisabled = currentInfo.Selection < currentInfo.Length && !currentInfo.Options[currentInfo.Selection].Enabled;
+
+            if (isDisabled && axis.PressedY)
+            {
+                // TODO: Maybe in the future we want to skip an entire row up or down?
+                currentInfo.Select(lastSelection, Game.NowUnscaled);
+            }
+            else if (isDisabled)
+            {
+                int sign = Math.Sign(axis.Value.X) < 0 ? -1 : 1;
+                int newOption = currentInfo.NextAvailableOption(currentInfo.Selection, sign);
+
+                if (newOption == selectedOptionIndex)
+                {
+                    // in the very drastic scenario that all options are not enabled, just go to whatever
+                    // next visible item is.
+                    newOption = Calculator.WrapAround(newOption + 1, newOption, currentInfo.VisibleItems);
+                }
+
+                currentInfo.Select(newOption, Game.NowUnscaled);
+            }
 
             currentInfo.Canceled = canceled;
             currentInfo.Overflow = overflow;

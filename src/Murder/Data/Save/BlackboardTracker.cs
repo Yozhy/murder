@@ -16,6 +16,7 @@ namespace Murder.Save
     /// <summary>
     /// Track variables that contain the state of the world.
     /// </summary>
+    [Serializable]
     public class BlackboardTracker
     {
         [Serialize]
@@ -52,7 +53,7 @@ namespace Murder.Save
         /// Triggered modified values that must be cleaned up.
         /// </summary>
         [Serialize, HideInEditor]
-        private readonly List<(BlackboardInfo info, string fieldName, object value)> _pendingModifiedValues = new();
+        private readonly List<(BlackboardInfo info, string fieldName, Type type)> _pendingModifiedValue = new();
 
         public virtual ImmutableDictionary<string, BlackboardInfo> FetchBlackboards() =>
             _blackboards ??= InitializeBlackboards();
@@ -159,7 +160,7 @@ namespace Murder.Save
         /// <summary>
         /// Set a field value for all character blackboards.
         /// </summary>
-        /// <param name="blackboardName">Name of the character blackboard.</param>
+        /// <param name="blackboardName">AtlasId of the character blackboard.</param>
         /// <param name="fieldName">Target field name.</param>
         /// <param name="value">Target value.</param>
         public bool SetValueForAllCharacterBlackboards<T>(string blackboardName, string fieldName, T value) where T : notnull
@@ -385,10 +386,12 @@ namespace Murder.Save
                 return GetValue<T>(fieldName);
             }
 
-            GameLogger.Verify(f.FieldType == typeof(T) || typeof(T) == typeof(object),
+            object? value = f.GetValue(info.Blackboard);
+
+            GameLogger.Verify(f.FieldType.IsEnum || f.FieldType == typeof(T) || typeof(T) == typeof(object),
                 "Wrong type for dialog variable!");
 
-            return (T)f.GetValue(info.Blackboard)!;
+            return (T)value!;
         }
 
         /// <summary>
@@ -478,7 +481,7 @@ namespace Murder.Save
                 if (!value.Equals(default(T)))
                 {
                     // Only track if this is not assigning to the default value.
-                    _pendingModifiedValues.Add((info, fieldName, default(T)!));
+                    _pendingModifiedValue.Add((info, fieldName, typeof(T)));
                 }
             }
 
@@ -564,17 +567,23 @@ namespace Murder.Save
         /// </summary>
         public void ResetPendingTriggers()
         {
-            if (_pendingModifiedValues.Count == 0)
+            if (_pendingModifiedValue.Count == 0)
             {
                 return;
             }
 
-            foreach ((BlackboardInfo info, string fieldName, object? value) in _pendingModifiedValues)
+            foreach ((BlackboardInfo info, string fieldName, Type t) in _pendingModifiedValue)
             {
-                SetValue(info, fieldName, value, isRevertingTrigger: true);
+                object? @default = Activator.CreateInstance(t);
+                if (Activator.CreateInstance(t) is null)
+                {
+                    continue;
+                } 
+
+                SetValue(info, fieldName, @default!, isRevertingTrigger: true);
             }
 
-            _pendingModifiedValues.Clear();
+            _pendingModifiedValue.Clear();
         }
 
         /// <summary>

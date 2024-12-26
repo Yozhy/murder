@@ -260,6 +260,22 @@ namespace Murder.Utilities
             return (angle % (2 * MathF.PI) + 2 * MathF.PI) % (2 * MathF.PI);
         }
 
+        public static float ClampAngle(float angle, float center, float range)
+        {
+            // Normalize angle to be within -π to π range relative to center
+            float halfRange = range / 2.0f;
+
+            // Wrap angle to be within center ± π
+            angle = (angle - center + MathF.PI) % (2 * MathF.PI);
+            if (angle < 0)
+                angle += 2 * MathF.PI;
+
+            angle = angle - MathF.PI + center;
+
+            // Clamp to center ± half range
+            return MathF.Max(center - halfRange, MathF.Min(center + halfRange, angle));
+        }
+
         public static bool Blink(float speed, bool scaled)
         {
             if (speed == 0)
@@ -784,6 +800,35 @@ namespace Murder.Utilities
             int v = a * b + 0x80;
             return (byte)((v >> 8) + v >> 8);
         }
+        #endregion
+
+        #region Strings
+
+        public static Point ParsePixelSize(string size)
+        {
+            // Remove any non-numeric characters except commas, spaces, and 'x'
+            string clean = new string(size
+                .Where(c => char.IsDigit(c) || c == ',' || c == ' ' || c == 'x')
+                .ToArray());
+
+            // Replace 'x' with a comma to standardize the format
+            clean = clean.Replace('x', ',').Replace(" ", ",");
+
+            // Split into width and height
+            string[] parts = clean.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length == 2)
+            {
+                if (int.TryParse(parts[0], out int width) && int.TryParse(parts[1], out int height))
+                {
+                    return new Point(width, height);
+                }
+            }
+
+            // Return a default size in case of failure
+            return new Point(800, 600); // Or handle the error as needed
+        }
+
         #endregion
     }
 }

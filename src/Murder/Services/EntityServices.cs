@@ -6,9 +6,11 @@ using Murder.Assets.Graphics;
 using Murder.Components;
 using Murder.Core;
 using Murder.Core.Geometry;
+using Murder.Core.Graphics;
 using Murder.Core.Physics;
 using Murder.Diagnostics;
 using Murder.Helpers;
+using Murder.Prefabs;
 using Murder.Utilities;
 using System.Collections.Immutable;
 using System.Numerics;
@@ -125,22 +127,9 @@ public static class EntityServices
         return FindRootEntity(parent);
     }
 
-    public static SpriteComponent? TryPlayAsepriteAnimationNext(this Entity entity, string animationName)
+    public static SpriteComponent? PlaySpriteAnimationNext(this Entity entity, string animationName)
     {
-        if (entity.TryGetSprite() is SpriteComponent aseprite)
-        {
-            SpriteComponent result = aseprite.PlayAfter(animationName);
-            entity.SetSprite(result);
-            entity.RemoveAnimationComplete();
-
-            return result;
-        }
-
-        return null;
-    }
-    public static SpriteComponent? PlayAsepriteAnimationNext(this Entity entity, string animationName)
-    {
-        if (TryPlayAsepriteAnimationNext(entity, animationName) is SpriteComponent result)
+        if (TryPlaySpriteAnimationNext(entity, animationName) is SpriteComponent result)
         {
             return result;
         }
@@ -149,9 +138,42 @@ public static class EntityServices
         return null;
     }
 
+    public static SpriteComponent? TryPlaySpriteAnimationNext(this Entity entity, string animationName)
+    {
+        if (entity.TryGetSprite() is SpriteComponent aseprite)
+        {
+            SpriteComponent result = aseprite.PlayAfter(animationName);
+            entity.SetSprite(result);
+
+            entity.RemoveAnimationComplete();
+            entity.RemoveAnimationCompleteMessage();
+
+            return result;
+        }
+
+        return null;
+    }
+
+    public static SpriteComponent? PlaySpriteAnimationNext(this Entity entity, params string[] animations)
+    {
+        if (entity.TryGetSprite() is SpriteComponent aseprite)
+        {
+            SpriteComponent result = aseprite.PlayAfter(animations);
+            entity.SetSprite(result);
+
+            entity.RemoveAnimationComplete();
+            entity.RemoveAnimationCompleteMessage();
+
+            return result;
+        }
+
+        return null;
+    }
+
     public static SpriteComponent? TryPlaySpriteAnimation(this Entity entity, params string[] nextAnimations) =>
         TryPlaySpriteAnimation(entity, nextAnimations.ToImmutableArray());
-    public static SpriteComponent? TryPlaySpriteAnimation(this Entity entity, ImmutableArray<string> nextAnimations)
+
+    public static SpriteComponent? TryPlaySpriteAnimation(this Entity entity, ImmutableArray<string> nextAnimations, Guid? replaceSpriteGuid = null)
     {
         if (entity.TryGetSprite() is SpriteComponent sprite)
         {
@@ -167,9 +189,13 @@ public static class EntityServices
 
             SpriteComponent result;
             if (nextAnimations.Length == 0)
-                result = sprite.Play(sprite.NextAnimations);
+            {
+                result = sprite.Play(sprite.NextAnimations, replaceSpriteGuid);
+            }
             else
-                result = sprite.Play(nextAnimations);
+            {
+                result = sprite.Play(nextAnimations, replaceSpriteGuid);
+            }
 
             entity.SetSprite(result);
 
@@ -189,12 +215,9 @@ public static class EntityServices
     /// <summary>
     /// Plays an animation or animation sequence. Loops the last animation.
     /// </summary>
-    /// <param name="entity"></param>
-    /// <param name="animations"></param>
-    /// <returns></returns>
-    public static SpriteComponent? PlaySpriteAnimation(this Entity entity, ImmutableArray<string> animations)
+    public static SpriteComponent? PlaySpriteAnimation(this Entity entity, ImmutableArray<string> animations, Guid? replaceSpriteGuid = null)
     {
-        if (TryPlaySpriteAnimation(entity, animations) is SpriteComponent aseprite)
+        if (TryPlaySpriteAnimation(entity, animations, replaceSpriteGuid) is SpriteComponent aseprite)
         {
             return aseprite;
         }
@@ -307,6 +330,8 @@ public static class EntityServices
             entity.SetSprite(result);
 
             entity.SetDoNotLoop();
+
+            entity.RemoveAnimationCompleteMessage();
             entity.RemoveAnimationComplete();
             entity.RemoveAnimationStarted();
 
@@ -507,9 +532,15 @@ public static class EntityServices
                         ignoreFacing: properties.HasFlag(AnimationOverloadProperties.IgnoreFacing),
                         customSprite: customSprite ?? Guid.Empty)
                     with
-                    { SortOffset = offset };
+                    { 
+                        SortOffset = offset,
+                        Flip = properties.HasFlag(AnimationOverloadProperties.FlipHorizontal) ? 
+                                ImageFlip.Horizontal : ImageFlip.None
+                    };
 
         e.SetAnimationOverload(overload);
+        e.RemoveAnimationComplete();
+        e.RemoveAnimationCompleteMessage();
     }
 }
 
@@ -518,5 +549,6 @@ public enum AnimationOverloadProperties
 {
     None = 0,
     Loop = 0x1,
-    IgnoreFacing = 0x10
+    IgnoreFacing = 0x10,
+    FlipHorizontal = 0x100
 }

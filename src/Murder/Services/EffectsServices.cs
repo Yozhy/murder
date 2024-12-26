@@ -4,6 +4,7 @@ using Bang.Entities;
 using Murder.Components;
 using Murder.Core;
 using Murder.Core.Graphics;
+using Murder.Core.Physics;
 using System.Numerics;
 
 namespace Murder.Services
@@ -14,7 +15,7 @@ namespace Murder.Services
         public static void CreateQuickSprite(World world, QuickSpriteInfo info, Entity? parent)
         {
             var e = world.AddEntity(
-                new SpriteComponent(info.Sprite, Vector2.Zero, info.Animations, info.YSortOffset, false, false, OutlineStyle.None, info.TargetSpriteBatch),
+                new SpriteComponent(info.Sprite, Vector2.Zero, info.Animations, info.YSortOffset, false, OutlineStyle.None, info.TargetSpriteBatch),
                 new DestroyOnAnimationCompleteComponent(),
                 new PositionComponent(info.Offset),
                 new DoNotPersistEntityOnSaveComponent()
@@ -29,15 +30,16 @@ namespace Murder.Services
         /// <summary>
         /// Add an entity which will apply a "fade-in" effect. Darkening the screen to black.
         /// </summary>
-        public static void FadeIn(World world, float time, Color color, float sorting = 0)
+        public static void FadeIn(World world, float time, Color color, float sorting = 0, int? targetBatch = null)
         {
             if (Game.Instance.IsSkippingDeltaTimeOnUpdate)
             {
                 return;
             }
 
-            var e = world.AddEntity();
-            e.SetFadeScreen(new(FadeType.In, Game.NowUnscaled, time, color, sorting: sorting));
+            Entity e = world.AddEntity();
+            e.SetFadeScreen(new FadeScreenComponent(FadeType.In, Game.NowUnscaled, time, color, sorting: sorting)
+                with { TargetBatch = targetBatch });
         }
 
         /// <summary>
@@ -114,6 +116,20 @@ namespace Murder.Services
                 new SpriteComponent(blastAnimation),
                 new DestroyOnAnimationCompleteComponent()
             );
+        }
+
+        public static void RemoveSolid(Entity e)
+        {
+            Entity? target = e.HasCollider() ? e : e.TryFetchChild("solid");
+            if (target is null)
+            {
+                return;
+            }
+
+            if (target.TryGetCollider() is ColliderComponent collider && (collider.Layer & CollisionLayersBase.SOLID) != 0)
+            {
+                target.SetCollider(collider.WithoutLayerFlag(CollisionLayersBase.SOLID));
+            }
         }
     }
 }

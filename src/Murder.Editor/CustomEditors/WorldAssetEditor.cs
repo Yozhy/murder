@@ -304,16 +304,22 @@ namespace Murder.Editor.CustomEditors
                         ImGui.BeginChild("cutscene_editor_child", ImGui.GetContentRegionAvail() - new Vector2(0, 5));
 
                         ImGuiHelpers.ColorIcon('\uf57e', Game.Profile.Theme.Accent);
-                        ImGuiHelpers.HelpTooltip("Display name of the world.");
+                        ImGuiHelpers.HelpTooltip("Display name of the world");
                         ImGui.SameLine();
 
                         modified |= CustomField.DrawValueWithId(ref _asset, nameof(WorldAsset.WorldName));
 
                         ImGuiHelpers.ColorIcon('\uf0dc', Game.Profile.Theme.Accent);
-                        ImGuiHelpers.HelpTooltip("Order which this world should be displayed.");
+                        ImGuiHelpers.HelpTooltip("Order which this world should be displayed");
                         ImGui.SameLine();
 
                         modified |= CustomField.DrawValueWithId(ref _asset, nameof(WorldAsset.Order));
+
+                        ImGuiHelpers.ColorIcon('\uf008', Game.Profile.Theme.Accent);
+                        ImGuiHelpers.HelpTooltip("Atlas which should be loaded with this map");
+                        ImGui.SameLine();
+
+                        modified |= CustomField.DrawValueWithId(ref _asset, nameof(WorldAsset.ReferencedAtlas));
 
                         ImGui.DragInt2("##MoveRoom", ref _moveRoomAmount[0], 1);
                         ImGui.SameLine();
@@ -592,7 +598,7 @@ namespace Murder.Editor.CustomEditors
             EnableEntity(parentGuid: null, e, activate);
         }
 
-        protected override void OnEntityModified(int entityId, IComponent c)
+        protected override void OnEntityModified(int entityId, Type t, IComponent? c)
         {
             GameLogger.Verify(_asset is not null);
 
@@ -624,7 +630,7 @@ namespace Murder.Editor.CustomEditors
                 }
             }
 
-            base.OnEntityModified(entityId, c);
+            base.OnEntityModified(entityId, t, c);
         }
 
         /// <summary>
@@ -783,11 +789,18 @@ namespace Murder.Editor.CustomEditors
             }
         }
 
-        public override bool RunDiagnostics()
+        public override bool RunDiagnostics(Guid worldGuid)
         {
+            WorldAsset? world = Game.Data.TryGetAsset<WorldAsset>(worldGuid);
+            if (world is null)
+            {
+                GameLogger.Warning($"Unable to retrieve asset {worldGuid}.");
+                return false;
+            }
+
             bool isValid = true;
 
-            ImmutableArray<Guid> instances = Instances;
+            ImmutableArray<Guid> instances = world.Instances;
             foreach (Guid g in instances)
             {
                 EntityInstance? e = TryFindInstance(g);

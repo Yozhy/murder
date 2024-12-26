@@ -13,6 +13,11 @@ namespace Murder.Systems.Graphics
     [Watch(typeof(RandomizeSpriteComponent))]
     public class RandomizeAsepriteSystem : IReactiveSystem
     {
+        public void OnActivated(World world, ImmutableArray<Entity> entities)
+        {
+            OnAdded(world, entities);
+        }
+
         public void OnAdded(World world, ImmutableArray<Entity> entities)
         {
             foreach (var e in entities)
@@ -29,7 +34,6 @@ namespace Murder.Systems.Graphics
                             randomizer.RandomizeAnimation ? GetRandomAnimationId(sprite.AnimationGuid) : sprite.NextAnimations,
                             sprite.YSortOffset,
                             randomizer.RandomRotate ? true : sprite.RotateWithFacing,
-                            randomizer.RandomFlip ? true : sprite.FlipWithFacing,
                             sprite.HighlightStyle,
                             sprite.TargetSpriteBatch
                         ));
@@ -40,9 +44,14 @@ namespace Murder.Systems.Graphics
                     e.SetAnimationStarted(Game.Random.NextFloat(1f, 32f));
                 }
 
-                if (randomizer.RandomRotate || randomizer.RandomFlip)
+                if (randomizer.RandomRotate)
                 {
                     e.SetFacing(DirectionHelper.RandomCardinal());
+                }
+
+                if (randomizer.RandomFlip && Game.Random.FlipACoin())
+                {
+                    e.SetFlipSprite(Core.Graphics.ImageFlip.Horizontal);
                 }
             }
         }

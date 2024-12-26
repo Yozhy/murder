@@ -105,7 +105,11 @@ public class SpriteFacingComponentEditor : CustomComponent
             int slices = sprite.FacingInfo.Length;
             ImGui.Text("Suffix:");
             ImGui.SameLine();
-            fileChanged |= ImGui.InputInt("##slices", ref slices);
+            if (ImGui.InputInt("##slices", ref slices))
+            {
+                fileChanged = true;
+                
+            }
 
             if (sprite.FacingInfo.Length > 0)
             {
@@ -154,7 +158,7 @@ public class SpriteFacingComponentEditor : CustomComponent
             {
                 AngleSize = angleSize,
                 Suffix = name, // Example suffix, you can customize this
-                Flip = flip // Default flip setting
+                Flip = flip // DefaultInitialization flip setting
             });
         }
 

@@ -2,9 +2,9 @@
 using Bang.Components;
 using Bang.Entities;
 using Bang.Systems;
+using Murder.Attributes;
 using Murder.Components;
 using Murder.Core.Particles;
-using Murder.Editor.Attributes;
 using System.Collections.Immutable;
 
 namespace Murder.Systems
@@ -30,20 +30,29 @@ namespace Murder.Systems
 
         public void OnRemoved(World world, ImmutableArray<Entity> entities)
         {
-            if (world.TryGetUniqueParticleSystemWorldTracker()?.Tracker is WorldParticleSystemTracker tracker)
+            if (world.TryGetUniqueParticleSystemWorldTracker()?.Tracker is not WorldParticleSystemTracker tracker)
             {
-                foreach (Entity e in entities)
-                {
-                    if (!tracker.IsTracking(e.EntityId))
-                    {
-                        if (e.GetParticleSystem().Asset != Guid.Empty)
-                        {
-                            tracker.Track(e);
-                        }
-                    }
+                return;
+            }
 
-                    tracker.Activate(e.EntityId);
+            foreach (Entity e in entities)
+            {
+                if (e.HasDisableParticleSystem())
+                {
+                    // added in the same frame?
+                    continue;
                 }
+
+                if (!tracker.IsTracking(e.EntityId))
+                {
+                    if (e.TryGetParticleSystem() is ParticleSystemComponent particle &&
+                        particle.Asset != Guid.Empty)
+                    {
+                        tracker.Track(e);
+                    }
+                }
+
+                tracker.Activate(e.EntityId);
             }
         }
     }

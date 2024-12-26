@@ -34,6 +34,12 @@ public enum DirectionFlags
 
 public static class DirectionHelper
 {
+    public static Direction Rotate90Degrees(this Direction direction)
+    {
+        int newDirection = (int)direction + 2;
+        return (Direction)newDirection;
+    }
+
     public static DirectionFlags ToDirectionFlag(this Direction direction)
     {
         switch (direction)
@@ -388,5 +394,11 @@ public static class DirectionHelper
             default:
                 throw new ArgumentException("Unsupported number of directions. Only 2, 4 or 8 are supported.");
         }
+    }
+
+    public static void Face(Entity from, Entity to)
+    {
+        Direction direction = LookAtEntity(from, to);
+        from.SetFacing(direction);
     }
 }

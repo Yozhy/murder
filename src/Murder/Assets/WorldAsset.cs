@@ -8,6 +8,7 @@ using Murder.Core;
 using Murder.Core.Cutscenes;
 using Murder.Core.Graphics;
 using Murder.Core.MurderActions;
+using Murder.Data;
 using Murder.Diagnostics;
 using Murder.Prefabs;
 using Murder.Serialization;
@@ -35,6 +36,11 @@ namespace Murder.Assets
         /// This is the order in which this world will be displayed in game (when selecting a lvel, etc.)
         /// </summary>
         public readonly int Order = 1;
+
+        /// <summary>
+        /// Atlases which should be preloaded prior to loading the world.
+        /// </summary>
+        public readonly ImmutableArray<ReferencedAtlas> ReferencedAtlas = [];
 
         /// <summary>
         /// Map of all the systems and whether they are active or not.
@@ -151,7 +157,7 @@ namespace Murder.Assets
             List<(ISystem, bool)> systemInstances = new();
 
             // Actually instantiate and add each of our system types.
-            ImmutableArray<(Type system, bool isActive)> allSystemTypes = FetchAllSystems().AddRange(startingSystems);
+            ImmutableArray<(Type system, bool isActive)> allSystemTypes = startingSystems.AddRange(FetchAllSystems());
             foreach (var (type, isActive) in allSystemTypes)
             {
                 if (type is null)

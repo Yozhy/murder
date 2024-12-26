@@ -5,6 +5,7 @@ using Bang.Systems;
 using Murder.Assets.Graphics;
 using Murder.Components;
 using Murder.Components.Graphics;
+using Murder.Core;
 using Murder.Core.Geometry;
 using Murder.Core.Graphics;
 using Murder.Diagnostics;
@@ -28,6 +29,11 @@ namespace Murder.Systems.Graphics
             foreach (Entity e in context.Entities)
             {
                 ImageFlip flip = ImageFlip.None;
+
+                if (e.TryGetFlipSprite() is FlipSpriteComponent flipSprite)
+                {
+                    flip = flipSprite.Orientation;
+                }
 
                 IMurderTransformComponent transform = e.GetGlobalTransform();
                 SpriteComponent s = e.GetSprite();
@@ -53,7 +59,6 @@ namespace Murder.Systems.Graphics
                 }
 
                 // Handle rotation
-                FacingComponent? facing = s.RotateWithFacing || s.FlipWithFacing ? e.TryGetFacing() : null;
                 float rotation = transform.Angle;
 
                 if (e.TryGetRotation() is RotationComponent RotationComponent)
@@ -61,11 +66,9 @@ namespace Murder.Systems.Graphics
                     rotation += RotationComponent.Rotation;
                 }
 
-                if (facing is not null)
+                if (s.RotateWithFacing && e.TryGetFacing() is FacingComponent facing)
                 {
-                    if (s.RotateWithFacing) rotation += facing.Value.Angle;
-                    // Currently we never flip sprites vertically with facing, so just assign the horizontal flip.
-                    if (s.FlipWithFacing && facing.Value.Direction.Flipped()) flip = ImageFlip.Horizontal;
+                    rotation += facing.Angle;
                 }
 
                 // Handle color
@@ -124,7 +127,8 @@ namespace Murder.Systems.Graphics
                         s.NextAnimations.Length <= 1 &&             // if this is a sequence, don't loop
                         !e.HasDoNotLoop() &&                       // if this has the DoNotLoop component, don't loop
                         !e.HasDestroyOnAnimationComplete() &&     // if you want to destroy this, don't loop
-                        (overload == null || (overload.Value.AnimationCount == 1 && overload.Value.Loop))
+                        (overload == null || (overload.Value.AnimationCount == 1 && overload.Value.Loop)),
+                    ForceFrame = e.TryGetSpriteFrame()?.Frame
                 };
 
                 var scale = e.TryGetScale()?.Scale ?? Vector2.One;
@@ -140,24 +144,47 @@ namespace Murder.Systems.Graphics
                 {
                     renderPosition += offset.Offset;
                 }
+                Color? outlineColor = e.HasDeactivateHighlightSprite() ? null :
+                    e.TryGetHighlightSprite()?.Color;
 
-                var frameInfo = RenderServices.DrawSprite(
-                    render.GetBatch(s.TargetSpriteBatch),
-                    asset,
-                    renderPosition,
-                    new DrawInfo(ySort)
-                    {
-                        Clip = clip,
-                        Origin = s.Offset,
-                        ImageFlip = flip,
-                        Rotation = rotation,
-                        Scale = scale,
-                        Color = color,
-                        BlendMode = blend,
-                        Sort = ySort,
-                        OutlineStyle = s.HighlightStyle,
-                        Outline = e.TryGetHighlightSprite()?.Color ?? null,
-                    }, animationInfo);
+                FrameInfo frameInfo;
+                if (animationInfo.ForceFrame.HasValue)
+                {
+                    frameInfo = RenderServices.DrawSprite(
+                        render.GetBatch(s.TargetSpriteBatch),
+                        renderPosition,
+                        clip,
+                        animation,
+                        asset,
+                        animationInfo.ForceFrame.Value,
+                        s.Offset,
+                        flip,
+                        rotation,
+                        scale,
+                        color,
+                        blend.ToVector3(),
+                        ySort);
+                }
+                else
+                {
+                    frameInfo = RenderServices.DrawSprite(
+                        render.GetBatch(s.TargetSpriteBatch),
+                        asset,
+                        renderPosition,
+                        new DrawInfo(ySort)
+                        {
+                            Clip = clip,
+                            Origin = s.Offset,
+                            ImageFlip = flip,
+                            Rotation = rotation,
+                            Scale = scale,
+                            Color = color,
+                            BlendMode = blend,
+                            Sort = ySort,
+                            OutlineStyle = s.HighlightStyle,
+                            Outline = outlineColor,
+                        }, animationInfo);
+                }
 
                 issueSlowdownWarning = RenderServices.TriggerEventsIfNeeded(e, s.AnimationGuid, animationInfo, frameInfo);
 

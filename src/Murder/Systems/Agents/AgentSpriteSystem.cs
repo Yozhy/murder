@@ -12,13 +12,15 @@ using Murder.Core.Geometry;
 using Murder.Core.Graphics;
 using Murder.Diagnostics;
 using Murder.Helpers;
+using Murder.Messages;
 using Murder.Services;
 using Murder.Utilities;
+using System.Diagnostics;
 using System.Numerics;
 
 namespace Murder.Systems
 {
-    [Filter(ContextAccessorFilter.AllOf, typeof(ITransformComponent), typeof(AgentSpriteComponent), typeof(FacingComponent))]
+    [Filter(ContextAccessorFilter.AllOf, typeof(ITransformComponent), typeof(AgentSpriteComponent), typeof(FacingComponent), typeof(InCameraComponent))]
     [ShowInEditor]
     public class AgentSpriteSystem : IMurderRenderSystem
     {
@@ -46,12 +48,7 @@ namespace Murder.Systems
                     renderPosition = transform.Vector2;
                 }
 
-                // This is as early as we can to check for out of bounds
-                if (!render.Camera.Bounds.Touches(new Rectangle(renderPosition - spriteAsset.Origin, spriteAsset.Size)))
-                    continue;
-
                 FacingComponent facing = e.GetFacing();
-
                 Vector2 impulse = Vector2.Zero;
 
                 if (e.TryGetAgentImpulse() is AgentImpulseComponent imp) impulse = imp.Impulse;
@@ -90,9 +87,23 @@ namespace Murder.Systems
                 float ySort = RenderServices.YSort(ySortOffsetRaw);
 
                 (string suffix, bool horizontalFlip) = DirectionHelper.GetSuffixFromAngle(e, prefix, facing.Angle);
+                ImageFlip imageFlip = horizontalFlip ? ImageFlip.Horizontal : ImageFlip.None;
 
-                if (overload is not null && overload.Value.IgnoreFacing)
-                    suffix = string.Empty;
+                if (overload is not null)
+                {
+                    if (overload.Value.IgnoreFacing)
+                    {
+                        suffix = string.Empty;
+
+                        // Ignore facing ignores the suffix for the animation, but still flips the sprite if facing left
+                        imageFlip = ImageFlip.None;
+                    }
+
+                    if (overload.Value.Flip != ImageFlip.None)
+                    {
+                        imageFlip = overload.Value.Flip;
+                    }
+                }
 
                 if (string.IsNullOrEmpty(suffix))
                     prefix = prefix.Trim('_');
@@ -180,6 +191,9 @@ namespace Murder.Systems
                     renderPosition += offset.Offset;
                 }
 
+                Color? outlineColor = e.HasDeactivateHighlightSprite() ? null : 
+                    e.TryGetHighlightSprite()?.Color;
+
                 // Draw to the sprite batch
                 FrameInfo frameInfo = RenderServices.DrawSprite(
                     render.GetBatch((int)target),
@@ -188,12 +202,12 @@ namespace Murder.Systems
                     new DrawInfo(ySort)
                     {
                         Clip = clip,
-                        ImageFlip = horizontalFlip ? ImageFlip.Horizontal : ImageFlip.None,
+                        ImageFlip = imageFlip,
                         Color = color,
                         Scale = scale,
                         BlendMode = blend,
                         Sort = ySort,
-                        Outline = e.TryGetHighlightSprite()?.Color,
+                        Outline = outlineColor,
                     }, animationInfo);
 
                 issueSlowdownWarning = RenderServices.TriggerEventsIfNeeded(e, spriteAsset.Guid, animationInfo, frameInfo);
@@ -203,7 +217,7 @@ namespace Murder.Systems
                     RenderedSprite = spriteAsset.Guid,
                     CurrentAnimation = frameInfo.Animation,
                     RenderPosition = renderPosition,
-                    ImageFlip = horizontalFlip ? ImageFlip.Horizontal : ImageFlip.None,
+                    ImageFlip = imageFlip,
                     Rotation = 0,
                     Scale = scale,
                     Color = color,
@@ -232,7 +246,7 @@ namespace Murder.Systems
                     else if (!overload.Value.Loop)
                     {
                         e.RemoveAnimationOverload();
-                        e.SendAnimationCompleteMessage();
+                        e.SendAnimationCompleteMessage(AnimationCompleteStyle.Sequence);
                         e.SetAnimationComplete();
                     }
                     else

@@ -2,8 +2,8 @@
 using Bang.Components;
 using Bang.Entities;
 using Bang.Systems;
-using Murder.Components;
-using Murder.Editor.Attributes;
+using Murder.Attributes;
+using Murder.Diagnostics;
 using Murder.Editor.Components;
 using Murder.Editor.Messages;
 using Murder.Editor.Utilities;
@@ -20,29 +20,13 @@ public class UpdateComponentSystem : IMessagerSystem
         {
             return;
         }
+
         EditorHook hook = editor.EditorHook;
+        AssetUpdatedMessage assetUpdated = (AssetUpdatedMessage)message;
 
-        Type type = ((AssetUpdatedMessage)message).UpdatedComponent;
+        Type type = assetUpdated.UpdatedComponent;
 
-        if (type == typeof(PositionComponent))
-        {
-            hook.OnComponentModified?.Invoke(entity.EntityId, entity.GetTransform());
-        }
-        else if (type == typeof(SpriteComponent))
-        {
-            hook.OnComponentModified?.Invoke(entity.EntityId, entity.GetSprite());
-        }
-        else if (type == typeof(AgentSpriteComponent))
-        {
-            hook.OnComponentModified?.Invoke(entity.EntityId, entity.GetAgentSprite());
-        }
-        else if (type == typeof(ColliderComponent))
-        {
-            hook.OnComponentModified?.Invoke(entity.EntityId, entity.GetCollider());
-        }
-        else if (type == typeof(SoundShapeComponent))
-        {
-            hook.OnComponentModified?.Invoke(entity.EntityId, entity.GetSoundShape());
-        }
+        _ = entity.TryGetComponent(type, out IComponent? c);
+        hook.OnComponentModified?.Invoke(entity.EntityId, type, c);
     }
 }

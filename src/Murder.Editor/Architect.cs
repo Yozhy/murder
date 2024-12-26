@@ -89,8 +89,7 @@ namespace Murder.Editor
             Instance = this;
 
             _playerInput.Register(MurderInputAxis.EditorCamera,
-                new InputButtonAxis(Keys.W, Keys.A, Keys.S, Keys.D),
-                new InputButtonAxis(Keys.Up, Keys.Left, Keys.Down, Keys.Right));
+                new InputButtonAxis(Keys.W, Keys.A, Keys.S, Keys.D));
 
             ImGuiRenderer = new ImGuiRenderer(this);
             ImGuiRenderer.RebuildFontAtlas();
@@ -142,7 +141,7 @@ namespace Murder.Editor
 
             if (!IsMaximized() && EditorSettings.WindowStartPosition.X > 0 && EditorSettings.WindowStartPosition.Y > 0)
             {
-                Point size = EditorSettings.WindowStartPosition - new Point(-2, 0);
+                Point size = EditorSettings.WindowStartPosition;
                 SetWindowPosition(size);
             }
 
@@ -154,9 +153,9 @@ namespace Murder.Editor
 
             if (EditorSettings.StartMaximized && GetWindowPosition() is Point startPosition)
             {
-                int titleBar = 32;
+                int titleBar = 34;
 
-                SetWindowPosition(new Point(startPosition.X - 2, titleBar));
+                SetWindowPosition(new Point(startPosition.X, titleBar));
                 MaximizeWindow();
             }
         }
@@ -537,8 +536,9 @@ namespace Murder.Editor
         protected override void ApplyGameSettingsImpl()
         {
             // This will allow us to run as many updates as possible in editor, for debugging.
-            _graphics.SynchronizeWithVerticalRetrace = false;
-            IsFixedTimeStep = false;
+            // keywords: Framerate, FPS, VSync
+            _graphics.SynchronizeWithVerticalRetrace = !Architect.EditorSettings.LockFramerate;
+            IsFixedTimeStep = !Architect.EditorSettings.LockFramerate;
         }
 
         protected override void Dispose(bool isDisposing)

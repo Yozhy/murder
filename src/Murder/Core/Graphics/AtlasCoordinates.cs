@@ -27,11 +27,11 @@ namespace Murder.Core.Graphics
         public readonly IntRectangle SourceRectangle;
         public readonly Rectangle UV;
         public readonly IntRectangle TrimArea;
-        public readonly AtlasId AtlasId;
+        public readonly string AtlasId;
 
         public static AtlasCoordinates Empty = new();
 
-        public AtlasCoordinates(string name, AtlasId atlasId, IntRectangle atlasRectangle, IntRectangle trimArea, Point size, int atlasIndex, int atlasWidth, int atlasHeight)
+        public AtlasCoordinates(string name, string atlasId, IntRectangle atlasRectangle, IntRectangle trimArea, Point size, int atlasIndex, int atlasWidth, int atlasHeight)
         {
             (Name, SourceRectangle, TrimArea, AtlasIndex) = (name, atlasRectangle, trimArea, atlasIndex);
             AtlasId = atlasId;
@@ -51,7 +51,7 @@ namespace Murder.Core.Graphics
             
             Vector2 rotationOffsetAdjustment = (new Vector2(
                 flipH ? Size.X * scale.X : 0,
-                flipV ? -Size.Y * scale.Y : 0)).Rotate(rotation);
+                flipV ? Size.Y * scale.Y : 0)).Rotate(rotation);
 
             // Adjust position for rotation and flip offsets
             Vector2 adjustedPosition = position + rotationOffsetAdjustment;

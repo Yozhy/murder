@@ -8,6 +8,7 @@ using Murder.Editor.Services;
 using Murder.Editor.Utilities;
 using Murder.Utilities;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Numerics;
 using static Murder.Editor.ImGuiExtended.SearchBox;
 
@@ -18,7 +19,7 @@ public partial class EditorScene
     private static readonly Vector2 _commandPaletteWindowSize = new(400, 350);
     private static readonly Vector2 _commandPalettePadding = new(20, 0);
     private static readonly Vector2 _commandPaletteSearchBoxPadding = new (20, 20);
-    private static readonly SearchBox.SearchBoxSizeConfiguration _commandPaletteSizeConfiguration = new(
+    private static readonly SearchBox.SearchBoxConfiguration _commandPaletteSizeConfiguration = new(
         SearchFrameSize: _commandPaletteWindowSize - _commandPalettePadding,
         SearchBoxContainerSize: _commandPaletteWindowSize - _commandPaletteSearchBoxPadding
     );
@@ -85,7 +86,8 @@ public partial class EditorScene
             [ShortcutGroup.Tools] =
             [
                 new ActionShortcut("Refresh Window", Keys.F4, RefreshEditorWindow),
-                new ActionShortcut("Run Diagnostics", new Chord(Keys.D, InputHelpers.OSActionModifier, Keys.LeftShift),  RunDiagnostics),
+                new ActionShortcut("Run Diagnostics", new Chord(Keys.D, InputHelpers.OSActionModifier, Keys.LeftShift), RunDiagnostics),
+                new ActionShortcut("Run All Diagnostics", new Chord(Keys.S, InputHelpers.OSActionModifier, Keys.LeftShift), RunAllDiagnostics),
                 new ActionShortcut("Command Palette", new Chord(Keys.A, InputHelpers.OSActionModifier, Keys.LeftShift), ToggleCommandPalette)
             ],
             [ShortcutGroup.Publish] =
@@ -272,7 +274,7 @@ public partial class EditorScene
         else
         {
             CustomEditorInstance? instance = GetOrCreateAssetEditor(asset);
-            if (instance?.Editor.RunDiagnostics() ?? true)
+            if (instance?.Editor.RunDiagnostics(asset.Guid) ?? true)
             {
                 GameLogger.Log($"\uf00c Successfully ran diagnostics on {asset.Name}.");
             }
@@ -283,11 +285,35 @@ public partial class EditorScene
         }
     }
 
+    private void RunAllDiagnostics()
+    {
+        if (_selectedTab == Guid.Empty || !_selectedAssets.TryGetValue(_selectedTab, out GameAsset? asset))
+        {
+            GameLogger.Warning("An asset must be opened in order to run all diagnostics.");
+        }
+        else
+        {
+            var allAssetsOfType = Game.Data.FilterAllAssets(asset.GetType()).Select(g => g.Value).OrderBy(g => g.FilePath);
+            foreach (GameAsset otherAsset in allAssetsOfType)
+            {
+                CustomEditorInstance? instance = GetOrCreateAssetEditor(otherAsset);
+                if (instance?.Editor.RunDiagnostics(otherAsset.Guid) ?? true)
+                {
+                    GameLogger.Log($"\uf00c Successfully ran diagnostics on {otherAsset.Name}.");
+                }
+                else
+                {
+                    GameLogger.Log($"\uf00d Issue found while running diagnostics on {otherAsset.Name}.");
+                }
+            }
+        }
+    }
+
     private void ReloadAtlasWithChangesToggled(bool value)
     {
         Architect.EditorSettings.AlwaysBuildAtlasOnStartup = value;
 
-        // Persist changes immediately.
+        // Persisted changes immediately.
         Architect.EditorData.SaveAsset(Architect.EditorSettings);
     }
 

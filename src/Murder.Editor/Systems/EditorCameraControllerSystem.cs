@@ -4,11 +4,11 @@ using Bang.Entities;
 using Bang.Systems;
 using ImGuiNET;
 using Microsoft.Xna.Framework.Input;
+using Murder.Attributes;
 using Murder.Components;
 using Murder.Core;
 using Murder.Core.Geometry;
 using Murder.Core.Input;
-using Murder.Editor.Attributes;
 using Murder.Editor.Components;
 using Murder.Editor.Core;
 using Murder.Systems;
@@ -64,7 +64,7 @@ namespace Murder.Editor.Systems
                     {
                         // Handled by ImGui
                     }
-                    else if (!Game.Input.Down(Keys.LeftControl) && noEntitiesSelected)
+                    else if (!Game.Input.Down(Keys.LeftControl))
                     {
                         Vector2 cameraMovement = Architect.Input.GetAxis(MurderInputAxis.EditorCamera).Value * Game.DeltaTime * Architect.EditorSettings.WasdCameraSpeed * Math.Clamp((1f / hook.CurrentZoomLevel), .75f, 10f);
                         if (Game.Input.Down(Keys.LeftShift))
