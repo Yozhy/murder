@@ -1,5 +1,8 @@
-﻿using Murder.Assets;
+﻿using ImGuiNET;
+using Murder.Assets;
 using Murder.Assets.Localization;
+using Murder.Core.Input;
+using Murder.Diagnostics;
 using Murder.Editor.ImGuiExtended;
 using Murder.Services;
 using static Murder.Editor.ImGuiExtended.SearchBox;
@@ -10,7 +13,7 @@ internal static class EditorLocalizationServices
 {
     public static LocalizedString? SearchLocalizedString()
     {
-        LocalizationAsset localization = LocalizationServices.GetCurrentLocalization();
+        LocalizationAsset localization = Game.Data.GetDefaultLocalization();
 
         SearchBoxSettings<Guid> settings = new(initialText: "Create localized string") 
         { 
@@ -68,7 +71,7 @@ internal static class EditorLocalizationServices
     {
         LocalizedString result = new(Guid.NewGuid());
 
-        LocalizationAsset asset = Game.Data.Localization;
+        LocalizationAsset asset = Game.Data.GetDefaultLocalization();
         asset.AddResource(result.Id);
 
         EditorServices.SaveAssetWhenSelectedAssetIsSaved(asset.Guid);
@@ -79,10 +82,44 @@ internal static class EditorLocalizationServices
 
     private static void AddExistingResource(Guid g)
     {
-        LocalizationAsset asset = Game.Data.Localization;
+        LocalizationAsset asset = Game.Data.GetDefaultLocalization();
         asset.AddResource(g);
 
         EditorServices.SaveAssetWhenSelectedAssetIsSaved(asset.Guid);
         asset.FileChanged = true;
+    }
+
+    /// <summary>
+    /// Draw pop up with notes for this resource string.
+    /// </summary>
+    public static void DrawNotesPopup(Guid g)
+    {
+        LocalizationAsset asset = Game.Data.GetDefaultLocalization();
+        if (asset.TryGetResource(g) is not LocalizedStringData data)
+        {
+            return;
+        }
+
+        ImGuiHelpers.HelpTooltip(string.IsNullOrEmpty(data.Notes) ? "(No notes)" : data.Notes);
+        DrawNotesPopup(asset, g, data);
+    }
+
+    public static void DrawNotesPopup(LocalizationAsset asset, Guid g, LocalizedStringData data)
+    {
+        if (ImGui.BeginPopup($"notes_{g}"))
+        {
+            string text = data.Notes ?? string.Empty;
+            if (ImGui.InputText("##notes_name", ref text, 1024, ImGuiInputTextFlags.AutoSelectAll))
+            {
+                asset.SetResource(data with { Notes = text });
+            }
+
+            if (ImGui.Button("Ok!") || Game.Input.Pressed(MurderInputButtons.Submit))
+            {
+                ImGui.CloseCurrentPopup();
+            }
+
+            ImGui.EndPopup();
+        }
     }
 }

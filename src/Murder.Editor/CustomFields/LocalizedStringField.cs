@@ -1,9 +1,11 @@
 ﻿using ImGuiNET;
 using Murder.Assets;
 using Murder.Assets.Localization;
+using Murder.Attributes;
 using Murder.Editor.ImGuiExtended;
 using Murder.Editor.Reflection;
 using Murder.Editor.Services;
+using Murder.Prefabs;
 using Murder.Services;
 
 namespace Murder.Editor.CustomFields;
@@ -16,13 +18,23 @@ internal class LocalizedStringField : CustomField
         bool modified = false;
         LocalizedString? localizedString = (LocalizedString?)fieldValue;
 
-        LocalizationAsset localization = LocalizationServices.GetCurrentLocalization();
+        LocalizationAsset localization = Game.Data.GetDefaultLocalization();
+
+        string searchId = $"Search_localized#{member.Name}";
 
         if (localizedString is null || localizedString.Value.Id == Guid.Empty)
         {
             bool create = false;
 
             ImGui.PushStyleColor(ImGuiCol.Button, Game.Profile.Theme.BgFaded);
+            if (ImGui.Button("\uf002"))
+            {
+                ImGui.OpenPopup(searchId);
+            }
+
+            ImGuiHelpers.HelpTooltip("Search existing localized string");
+
+            ImGui.SameLine();
             if (ImGui.Button("\uf15e"))
             {
                 create = true;
@@ -36,11 +48,11 @@ internal class LocalizedStringField : CustomField
                 return (true, EditorLocalizationServices.AddNewResource());
             }
         }
-        else
+        else if (localizedString.Value.Id is Guid guid)
         {
             if (ImGuiHelpers.DeleteButton($"localized_{member.Name}"))
             {
-                localization.RemoveResource(localizedString.Value.Id);
+                localization.RemoveResource(guid);
 
                 localizedString = default;
                 modified = true;
@@ -54,8 +66,34 @@ internal class LocalizedStringField : CustomField
                 modified = true;
             }
 
-            ImGuiHelpers.HelpTooltip("Reset localized string");
+            ImGuiHelpers.HelpTooltip("Discard localized string without deleting");
             ImGui.SameLine();
+
+            // == Notes ==
+            if (ImGuiHelpers.BlueIcon('\uf10d', $"note_b_{guid}"))
+            {
+                ImGui.OpenPopup($"notes_{guid}");
+            }
+
+            EditorLocalizationServices.DrawNotesPopup(guid);
+            ImGui.SameLine();
+        }
+
+        if (ImGui.BeginPopup(searchId))
+        {
+            ImGui.Dummy(new System.Numerics.Vector2(300, 0));
+
+            if (EditorLocalizationServices.SearchLocalizedString() is LocalizedString localizedResult)
+            {
+                localizedString = localizedResult;
+
+                ImGui.CloseCurrentPopup();
+            }
+
+            ImGui.Dummy(new System.Numerics.Vector2(300, 0));
+            ImGui.EndPopup();
+
+            return (true, localizedString);
         }
 
         if (localizedString is null || localizedString.Value.Id == Guid.Empty)
@@ -69,7 +107,16 @@ internal class LocalizedStringField : CustomField
         }
 
         string text = data.String;
-        if (ImGui.InputText($"##{data.Guid}", ref text, 2048))
+        if (AttributeExtensions.IsDefined(member, typeof(MultilineAttribute)))
+        {
+            modified = ImGui.InputTextMultiline($"##{data.Guid}", ref text, 1024, new(-1, 75));
+        }
+        else
+        {
+            modified = ImGui.InputText($"##{data.Guid}", ref text, 2048);
+        }
+
+        if (modified)
         {
             data = data with { String = text };
 

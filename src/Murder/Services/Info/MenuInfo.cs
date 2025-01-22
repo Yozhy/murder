@@ -1,6 +1,7 @@
 ﻿using Murder.Core.Sounds;
 using Murder.Services;
 using Murder.Utilities;
+using static Murder.Core.Input.PlayerInput;
 
 namespace Murder.Core.Input
 {
@@ -9,6 +10,7 @@ namespace Murder.Core.Input
         public T[] Options = new T[0];
 
         public int Scroll = 0;
+        public float SmoothScroll = 0;
 
         public bool Canceled = false;
         public bool Disabled = false;
@@ -17,7 +19,8 @@ namespace Murder.Core.Input
         public float LastPressed = 0;
         public float LastMoved;
 
-        public int Overflow = 0;
+        public int OverflowX = 0;
+        public int OverflowY = 0;
         public int PreviousSelection;
 
         /// <summary>
@@ -59,19 +62,9 @@ namespace Murder.Core.Input
             return option;
         }
 
-        public void Select(int index) => Select(index, Game.NowUnscaled);
 
         public void Select(int index, float now)
-        {
-            if (index < Scroll)
-            {
-                Scroll = index;
-            }
-            else if (index >= Scroll + VisibleItems)
-            {
-                Scroll = index - VisibleItems + 1;
-            }
-
+        {           
             JustMoved = Selection != index;
 
             PreviousSelection = Selection;
@@ -96,7 +89,8 @@ namespace Murder.Core.Input
         public float LastPressed;
         public bool Canceled;
         public bool Disabled = false;
-        public int Overflow = 0;
+        public int OverflowX = 0;
+        public int OverflowY = 0;
         public bool JustMoved = false;
         public int Scroll = 0;
 
@@ -172,9 +166,9 @@ namespace Murder.Core.Input
             Resize(size);
         }
 
-        public void Clamp(int max)
+        public void Clamp()
         {
-            Selection = Math.Max(0, Math.Min(Selection, max));
+            Selection = Math.Max(0, Math.Min(Selection, Options.Length - 1));
         }
 
         public MenuInfo Disable(bool disabled)
