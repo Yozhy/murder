@@ -1,7 +1,6 @@
-﻿using Bang.Components;
-using ImGuiNET;
+﻿using ImGuiNET;
 using Murder.Assets;
-using Murder.Assets.Localization;
+using Murder.Attributes;
 using Murder.Core.Dialogs;
 using Murder.Core.Graphics;
 using Murder.Core.Input;
@@ -9,14 +8,12 @@ using Murder.Diagnostics;
 using Murder.Editor.Attributes;
 using Murder.Editor.Components;
 using Murder.Editor.CustomComponents;
-using Murder.Editor.Data;
 using Murder.Editor.ImGuiExtended;
 using Murder.Editor.Reflection;
 using Murder.Editor.Stages;
 using Murder.Editor.Systems;
-using Murder.Editor.Utilities.Attributes;
+using Murder.Services;
 using System.Collections.Immutable;
-using System.Diagnostics;
 
 namespace Murder.Editor.CustomEditors
 {
@@ -253,6 +250,8 @@ namespace Murder.Editor.CustomEditors
                 {
                     SwitchSituation(info, asset.Situations.First().Value);
                 }
+
+                info.Stage.EditorHook.ForceUpdateDialogue = true;
             }
         }
 
@@ -282,6 +281,20 @@ namespace Murder.Editor.CustomEditors
             {
                 foreach (Dialog d in situation.Dialogs)
                 {
+                    foreach (Line l in d.Lines)
+                    {
+                        if (!l.IsText)
+                        {
+                            continue;
+                        }
+
+                        if (LocalizationServices.TryGetLocalizedString(l.Text) is null)
+                        {
+                            GameLogger.Error($"Found invalid string at: {name}, {d.Id}.");
+                            foundIssue = true;
+                        }
+                    }
+
                     if (d.Actions is not null)
                     {
                         for (int i = 0; i < d.Actions.Value.Length; ++i)

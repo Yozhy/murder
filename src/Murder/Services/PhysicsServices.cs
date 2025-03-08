@@ -5,6 +5,7 @@ using Bang.Entities;
 using Murder.Components;
 using Murder.Core;
 using Murder.Core.Geometry;
+using Murder.Core.Graphics;
 using Murder.Core.Physics;
 using Murder.Diagnostics;
 using Murder.Utilities;
@@ -423,6 +424,30 @@ namespace Murder.Services
             return FindNextAvailablePosition(world, e, center, target, map, collisionEntities, _checkedPositionsCache, flags, layerMask);
         }
 
+        public static bool CollidesAt(
+            World world,
+            Entity e,
+            Vector2 position,
+            int layerMask)
+        {
+            Map map = world.GetUniqueMap().Map;
+            var collisionEntities = FilterPositionAndColliderEntities(
+                world,
+                layerMask);
+
+            if (e.TryGetCollider() is ColliderComponent collider)
+            {
+                return CollidesAt(map, e.EntityId, collider, position, collisionEntities, layerMask, out int _);
+            }
+            else
+            {
+                GameLogger.Warning("Creating a collider on the fly, is this really what you want?");
+                // Check using a single point
+                return CollidesAt(map, e.EntityId, new ColliderComponent(new PointShape(), CollisionLayersBase.NONE, Color.Gray), position, collisionEntities, layerMask, out int _);
+            }
+        }
+
+
 
         /// <summary>
         /// Position to check for collision used by <c>FindNextAvailablePosition</c>.
@@ -644,14 +669,17 @@ namespace Murder.Services
             return collisionEntities;
         }
 
+        private static readonly List<NodeInfo<Entity>> _cachedCollisions = new();
+
         public static IEnumerable<Entity> GetAllCollisionsAt(World world, Point position, ColliderComponent collider, int ignoreId, int mask)
         {
-            var qt = world.GetUniqueQuadtree().Quadtree;
-            // Now, check against other entities.
-            List<NodeInfo<Entity>> others = new();
-            qt.GetCollisionEntitiesAt(GetBoundingBox(collider, position), others);
+            _cachedCollisions.Clear();
 
-            foreach (var other in others)
+            // Now, check against other entities.
+            Quadtree qt = world.GetUniqueQuadtree().Quadtree;
+            qt.GetCollisionEntitiesAt(GetBoundingBox(collider, position), _cachedCollisions);
+
+            foreach (var other in _cachedCollisions)
             {
                 if (other.EntityInfo.IsDestroyed || other.EntityInfo.TryGetCollider() is not ColliderComponent otherCollider)
                     continue;
@@ -1160,7 +1188,7 @@ namespace Murder.Services
                     Point point;
                     Circle circle;
 
-                    if (shape1 is BoxShape)
+                    if (shape1 is CircleShape)
                     {
                         circle = ((CircleShape)shape1).Circle.AddPosition(position1);
                         point = ((PointShape)shape2).Point + position2;

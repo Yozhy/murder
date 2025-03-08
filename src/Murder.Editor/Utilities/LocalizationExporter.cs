@@ -4,20 +4,28 @@ using Murder.Diagnostics;
 using System.Text;
 using Murder.Serialization;
 using Murder.Assets;
+using System.IO;
 
 namespace Murder.Editor.Utilities.Serialization;
 
 internal static class LocalizationExporter
 {
-    private static string GetFullRawLocalizationPath(string name) => Path.Combine(
-        FileHelper.GetPath(Architect.EditorData.EditorSettings.RawResourcesPath),
-        Game.Profile.LocalizationPath,
-         $"{name}.csv");
+    public static string GetFullRawLocalizationPath() => Path.Combine(
+        FileHelper.GetPath(
+            Architect.EditorData.EditorSettings.RawResourcesPath),
+            Game.Profile.LocalizationPath);
+
+    public static string GetFullRawLocalizationPath(string name) => Path.Combine(
+        GetFullRawLocalizationPath(), $"{name}.csv");
 
     private static string Escape(string? text) => text is null ? string.Empty : text.Replace("\"", "\"\"");
 
+    private static bool _isExporting = false;
+
     public static bool ExportToCsv(LocalizationAsset asset)
     {
+        _isExporting = true;
+
         LocalizationAsset reference = Architect.EditorData.GetDefaultLocalization();
 
         StringBuilder builder = new();
@@ -82,59 +90,80 @@ internal static class LocalizationExporter
         FileManager.CreateDirectoryPathIfNotExists(fullLocalizationPath);
 
         _ = File.WriteAllTextAsync(fullLocalizationPath, builder.ToString(), Encoding.UTF8);
+
+        _isExporting = false;
         return true;
     }
 
     public static bool ImportFromCsv(LocalizationAsset asset)
     {
+        if (_isExporting)
+        {
+            // do not import while we are exporting...
+            return false;
+        }
+
         string fullLocalizationPath = GetFullRawLocalizationPath(asset.Name);
         if (!File.Exists(fullLocalizationPath))
         {
             return false;
         }
 
-        using TextFieldParser parser = new(fullLocalizationPath);
+        // create a temporary copy so it doesn't yell at excel opening your file.
+        string tmpPath = Path.Combine(Path.GetTempPath(), asset.Name);
 
-        parser.TextFieldType = FieldType.Delimited;
-        parser.SetDelimiters(",");
-
-        int row = 0;
-        while (!parser.EndOfData)
+        try
         {
-            row++;
+            File.Copy(fullLocalizationPath, tmpPath, true);
 
-            // Read tokens for this row
-            string[]? tokens = parser.ReadFields();
-            if (tokens is null || tokens[0].StartsWith("Guid") || tokens[0].StartsWith('#'))
+            using TextFieldParser parser = new(tmpPath);
+
+            parser.TextFieldType = FieldType.Delimited;
+            parser.SetDelimiters(",");
+
+            int row = 0;
+            while (!parser.EndOfData)
             {
-                continue;
+                row++;
+
+                // Read tokens for this row
+                string[]? tokens = parser.ReadFields();
+                if (tokens is null || tokens[0].StartsWith("Guid") || tokens[0].StartsWith('#'))
+                {
+                    continue;
+                }
+
+                if (tokens.Length < 2)
+                {
+                    GameLogger.Warning($"Skipping row {row} from {fullLocalizationPath}.");
+                }
+
+                Guid guid;
+                try
+                {
+                    guid = Guid.Parse(tokens[0]);
+                }
+                catch
+                {
+                    GameLogger.Warning($"Skipping row {row} from {fullLocalizationPath}.");
+                    continue;
+                }
+
+                /* not really used? */
+                /* string original = tokens[1]; */
+
+                string translated = tokens.Length > 3 ? tokens[3] : string.Empty;
+                string? notes = tokens.Length > 4 ? tokens[4] : null;
+
+                asset.UpdateOrSetResource(guid, translated, notes);
             }
-
-            if (tokens.Length < 2)
-            {
-                GameLogger.Warning($"Skipping row {row} from {fullLocalizationPath}.");
-            }
-
-            Guid guid;
-            try
-            {
-                guid = Guid.Parse(tokens[0]);
-            }
-            catch
-            {
-                GameLogger.Warning($"Skipping row {row} from {fullLocalizationPath}.");
-                continue;
-            }
-
-            /* not really used? */
-            /* string original = tokens[1]; */
-
-            string translated = tokens.Length > 3 ? tokens[3] : string.Empty;
-            string? notes = tokens.Length > 4 ? tokens[4] : null;
-
-            asset.UpdateOrSetResource(guid, translated, notes);
+        }
+        catch (IOException)
+        {
+            GameLogger.Warning($"Unable to open the file: {fullLocalizationPath}.");
         }
 
+        File.Delete(tmpPath);
         return true;
     }
 }

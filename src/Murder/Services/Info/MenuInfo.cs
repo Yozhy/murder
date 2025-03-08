@@ -1,4 +1,5 @@
 ﻿using Murder.Core.Sounds;
+using Murder.Diagnostics;
 using Murder.Services;
 using Murder.Utilities;
 using static Murder.Core.Input.PlayerInput;
@@ -64,14 +65,13 @@ namespace Murder.Core.Input
 
 
         public void Select(int index, float now)
-        {           
+        {
             JustMoved = Selection != index;
 
             PreviousSelection = Selection;
 
             Selection = index;
             LastMoved = now;
-            LastPressed = now;
 
             if (JustMoved)
             {
@@ -93,6 +93,8 @@ namespace Murder.Core.Input
         public int OverflowY = 0;
         public bool JustMoved = false;
         public int Scroll = 0;
+
+        public float SmoothScroll = 0;
 
         /// <summary>
         /// Number of options in this menu
@@ -225,6 +227,10 @@ namespace Murder.Core.Input
             while (totalOptionsTried < Length)
             {
                 option += direction;
+                if (direction == 0)
+                {
+                    direction = 1;
+                }
                 option = Calculator.WrapAround(option, 0, Length - 1);
 
                 if (IsOptionAvailable(option))
@@ -238,6 +244,122 @@ namespace Murder.Core.Input
             return option;
         }
 
+        public (int option, bool wrapped) NextAvailableOptionHorizontal(in int option, int width, int direction)
+        {
+            int startRow = Calculator.FloorToInt(option / (float)width);
+            int startCollumn = option % width;
+
+            int totalCollumns = width;
+            int totalAttempts = 0;
+
+            bool wrapped = false;
+            while (totalAttempts < width)
+            {
+                int collumn = Calculator.WrapAround(startCollumn + direction * totalAttempts, 0, width - 1);
+                // Did we wrap around?
+                if (collumn > startCollumn && direction < 0)
+                {
+                    wrapped = true;
+                }
+                if (collumn < startCollumn && direction > 0)
+                {
+                    wrapped = true;
+                }
+
+                for (int i = 0; i < totalCollumns; i++)
+                {
+                    int checkRow = startRow - i;
+                    if (checkRow >= 0)
+                    {
+                        int nextOption = checkRow * width + collumn;
+                        if (nextOption > 0 && nextOption < Length)
+                        {
+                            if (IsOptionAvailable(nextOption))
+                            {
+                                return (nextOption, wrapped);
+                            }
+                        }
+                    }
+
+                    checkRow = startRow + i;
+                    if (checkRow < totalCollumns)
+                    {
+                        int nextOption = checkRow * width + collumn;
+                        if (nextOption > 0 && nextOption < Length)
+                        {
+                            if (IsOptionAvailable(nextOption))
+                            {
+                                return (nextOption, wrapped);
+                            }
+                        }
+                    }
+                }
+
+                totalAttempts++;
+            }
+
+            return (option, false);
+        }
+
+        public (int option, bool wrapped) NextAvailableOptionVertical(in int option, int width, int direction)
+        {
+            // If we didn't find an option in the current column, closest to the current selection,
+            // the first option available in the next row.
+            int initialRow = Calculator.FloorToInt(option / width);
+            int totalRows = Calculator.CeilToInt(Length / width);
+
+            int collumn = option % width;
+
+            int totalAttempts = 0;
+            bool wrapped = false;
+            while (totalAttempts < totalRows)
+            {
+                int row = Calculator.WrapAround(initialRow + direction * totalAttempts, 0, totalRows);
+                // Did we wrap around?
+                if (row > initialRow && direction < 0)
+                {
+                    wrapped = true;
+                }
+                if (row < initialRow && direction > 0)
+                {
+                    wrapped = true;
+                }
+
+                // First we try the first one imediatelly below or above the current selection.
+                for (int i = 0; i < width; i++)
+                {
+                    int checkCollumn = collumn - i;
+                    if (checkCollumn >= 0)
+                    {
+                        int nextOption = row * width + checkCollumn;
+                        if (nextOption > 0 && nextOption < Length)
+                        {
+                            if (IsOptionAvailable(nextOption))
+                            {
+                                return (nextOption, wrapped);
+                            }
+                        }
+                    }
+
+                    checkCollumn = collumn + i;
+                    if (checkCollumn < width)
+                    {
+                        int nextOption = row * width + checkCollumn;
+                        if (nextOption > 0 && nextOption < Length)
+                        {
+                            if (IsOptionAvailable(nextOption))
+                            {
+                                return (nextOption, wrapped);
+                            }
+                        }
+                    }
+                }
+
+                totalAttempts++;
+            }
+
+            return (option, false);
+        }
 
         /// <summary>
         /// Resets the menu info selector to the first available option.
@@ -273,17 +395,20 @@ namespace Murder.Core.Input
             LastPressed = now;
         }
 
-        public void Select(int index) => Select(index, Game.NowUnscaled);
+        public void Select(int index) => Select(index, Game.NowUnscaled, true);
 
-        public void Select(int index, float now)
+        public void Select(int index, float now, bool updateScroll = true)
         {
-            if (index < Scroll)
+            if (updateScroll)
             {
-                Scroll = index;
-            }
-            else if (index >= Scroll + VisibleItems)
-            {
-                Scroll = index - VisibleItems + 1;
+                if (index < Scroll)
+                {
+                    Scroll = index;
+                }
+                else if (index >= Scroll + VisibleItems)
+                {
+                    Scroll = index - VisibleItems + 1;
+                }
             }
 
             JustMoved = Selection != index;
@@ -293,6 +418,16 @@ namespace Murder.Core.Input
             Selection = index;
             LastMoved = now;
             LastPressed = now;
+
+
+            if (Selection >= Options.Length)
+            {
+                Selection = Options.Length - 1;
+            }
+            if (Selection < 0)
+            {
+                Selection = 0;
+            }
 
             if (JustMoved && (Selection >= Options.Length || Options[Selection].Enabled))
             {
