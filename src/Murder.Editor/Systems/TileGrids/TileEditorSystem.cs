@@ -23,8 +23,172 @@ namespace Murder.Editor.Systems
 {
     [TileEditor]
     [Filter(typeof(TileGridComponent))]
-    public partial class TileEditorSystem : IMurderRenderSystem
+    public partial class TileEditorSystem : IUpdateSystem, IMurderRenderSystem
     {
+        public void Update(Context context)
+        {
+            if (context.World.TryGetUnique<EditorComponent>()?.EditorHook is not EditorHook hook)
+            {
+                return;
+            }
+
+            if (!Game.Instance.IsActive)
+            {
+                return;
+            }
+
+            if (hook.CursorWorldPosition is null)
+            {
+                return;
+            }
+
+            _inputAvailable = true;
+
+            if (hook.CursorIsBusy.Count != 0 || hook.UsingGui)
+            {
+                // Someone else is using our cursor, let's wait out turn.
+                _inputAvailable = false;
+            }
+
+            UpdateToolbox(((MonoWorld)context.World).Camera, hook);
+
+            bool isCursorBusy = _downOnToolboxArea || _hoveredOnToolboxArea;
+            if (isCursorBusy)
+            {
+                return;
+            }
+
+            if (_editorMode == EditorMode.Cut)
+            {
+                // update here?
+            }
+            else
+            {
+                foreach (Entity e in context.Entities)
+                {
+                    TileGridComponent gridComponent = e.GetTileGrid();
+
+                    TileGrid grid = gridComponent.Grid;
+                    Point position = gridComponent.Origin;
+
+                    if (_dragModeAvailable)
+                    {
+                        UpdateDragRoom(e, hook.CursorWorldPosition.Value, position, grid);
+                    }
+
+                    if (_isPaintTileAvailable)
+                    {
+                        UpdatePaintTile(hook, e, gridComponent);
+                    }
+                }
+
+                if (Game.Input.Released(MurderInputButtons.LeftClick) || Game.Input.Released(MurderInputButtons.RightClick))
+                {
+                    _startedShiftDragging = null;
+                }
+            }
+        }
+
+        private void UpdateDragRoom(Entity e, Point cursorWorldPosition, Point position, TileGrid grid)
+        {
+            IntRectangle gridRectangle = new Rectangle(position.X, position.Y, grid.Width, grid.Height);
+            Rectangle worldRectangle = gridRectangle * Grid.CellSize;
+
+            int id = e.EntityId;
+            if (EditorServices.DragArea(
+                $"drag_{id}", cursorWorldPosition, worldRectangle, out Vector2 newDragWorldTopLeft))
+            {
+                Point newGridTopLeft = newDragWorldTopLeft.ToGridPoint();
+
+                // Clamp at zero.
+                newGridTopLeft.X = Math.Max(newGridTopLeft.X, 0);
+                newGridTopLeft.Y = Math.Max(newGridTopLeft.Y, 0);
+
+                _resize = new(position: newGridTopLeft, gridRectangle.Size);
+                _targetEntity = id;
+            }
+        }
+
+        private void UpdatePaintTile(EditorHook hook, Entity e, TileGridComponent grid)
+        {
+            if (hook.CursorWorldPosition is not Point cursorWorldPosition)
+            {
+                return;
+            }
+
+            Point lowerBoundGridPosition = cursorWorldPosition.FromWorldToLowerBoundGridPosition();
+            if (FitCursorPositionToGrid(grid, lowerBoundGridPosition) is not Point cursorGridPosition)
+            {
+                return;
+            }
+
+            // We are actually applying operation over an area.
+            if (_startedShiftDragging == null &&
+                Game.Input.Down(MurderInputButtons.Shift) &&
+                (Game.Input.Down(MurderInputButtons.LeftClick) || Game.Input.Down(MurderInputButtons.RightClick)))
+            {
+                _targetEntity = e.EntityId;
+
+                // Start tracking the origin.
+                _startedShiftDragging = cursorGridPosition;
+                _currentRectDraw = GridHelper.FromTopLeftToBottomRight(_startedShiftDragging.Value, cursorGridPosition) * Grid.CellSize;
+                _dragColor = Game.Input.Down(MurderInputButtons.LeftClick) ? Color.Green * .1f : Color.Red * .05f;
+                _tweenStart = Game.Now;
+            }
+
+            int selectedTileMask = hook.CurrentSelectedTile.ToMask();
+
+            if (_startedShiftDragging != null && _dragColor != null)
+            {
+                // Draw the gridRectangle applied over the area.
+                IntRectangle draggedRectangle = GridHelper.FromTopLeftToBottomRight(_startedShiftDragging.Value, cursorGridPosition);
+
+                if (grid.Rectangle.Contains(lowerBoundGridPosition))
+                {
+                    Rectangle targetSize = draggedRectangle * Grid.CellSize;
+                    _currentRectDraw = Rectangle.Lerp(_currentRectDraw, targetSize, 0.45f);
+                }
+
+                if (Game.Input.Released(MurderInputButtons.LeftClick))
+                {
+                    grid.Grid.SetGridPosition(draggedRectangle, selectedTileMask);
+                }
+                else if (Game.Input.Released(MurderInputButtons.RightClick))
+                {
+                    grid.Grid.UnsetGridPosition(draggedRectangle, selectedTileMask);
+                }
+
+                return;
+            }
+
+            // We are applying an operation over an individual tile.
+            if (!hook.IsMouseOnStage)
+            {
+                return;
+            }
+
+            if (Game.Input.Down(MurderInputButtons.LeftClick))
+            {
+                if (!grid.Grid.AtGridPosition(cursorGridPosition).HasFlag(selectedTileMask))
+                {
+                    _tweenStart = Game.Now;
+
+                    // paint individual tile
+                    grid.Grid.SetGridPosition(cursorGridPosition, selectedTileMask);
+                }
+            }
+            else if (Game.Input.Down(MurderInputButtons.RightClick))
+            {
+                if (grid.Grid.AtGridPosition(cursorGridPosition).HasFlag(selectedTileMask))
+                {
+                    _tweenStart = Game.Now;
+
+                    // remove individual tile
+                    grid.Grid.UnsetGridPosition(cursorGridPosition, selectedTileMask);
+                }
+            }
+        }
+
         public void Draw(RenderContext render, Context context)
         {
             if (context.World.TryGetUnique<EditorComponent>() is not EditorComponent editor)
@@ -37,38 +201,34 @@ namespace Murder.Editor.Systems
                 return;
             }
 
-            _inputAvailable = true;
+            bool isCursorBusy = _downOnToolboxArea || _hoveredOnToolboxArea;
 
-            EditorHook hook = context.World.GetUnique<EditorComponent>().EditorHook;
-            if (hook.CursorIsBusy.Any() || hook.UsingGui)
-            {
-                // Someone else is using our cursor, let's wait out turn.
-                _inputAvailable = false;
-            }
+            _dragModeAvailable = false;
+            _isPaintTileAvailable = false;
 
             // Draw the toolbox
-            bool isCursorWithin = DrawToolbox(render, editor);
+            DrawToolbox(render);
 
             // Whether the cursor if within or interacting with any of the rooms.
 
-            if (!isCursorWithin)
+            if (!isCursorBusy)
             {
                 if (_editorMode == EditorMode.Cut)
                 {
-                    isCursorWithin |= DrawTileSelector(render, context, editor);
+                    isCursorBusy |= DrawTileSelector(render, context, editor);
                 }
                 else
                 {
                     foreach (Entity e in context.Entities)
                     {
-                        isCursorWithin |= DrawResizeBox(render, context.World, editor, e);
-                        isCursorWithin |= DrawTilePainter(render, editor, e);
+                        isCursorBusy |= DrawResizeBox(render, context.World, editor, e);
+                        isCursorBusy |= DrawTilePainter(render, editor, e);
                     }
                 }
                 
             }
 
-            if (!isCursorWithin)
+            if (!isCursorBusy)
             {
                 DrawNewRoom(editor);
             }
@@ -94,6 +254,8 @@ namespace Murder.Editor.Systems
             if (DrawHandles(render, world, editor, e.EntityId, rectangle, color) is IntRectangle newRectangle)
             {
                 grid.Resize(newRectangle);
+
+                e.RemoveTileGrid();
                 e.SetTileGrid(grid);
             }
 
@@ -102,6 +264,9 @@ namespace Murder.Editor.Systems
 
         private int _targetEntity = -1;
         private Rectangle? _resize;
+
+        private bool _dragModeAvailable = false;
+        private bool _isPaintTileAvailable = false;
 
         /// <summary>
         /// Draw a box and listen to user input.
@@ -148,23 +313,12 @@ namespace Murder.Editor.Systems
 
                 if (_inputAvailable && editor.EditorHook.CursorWorldPosition != null)
                 {
-                    if (EditorServices.DragArea(
-                        $"drag_{id}", editor.EditorHook.CursorWorldPosition.Value, worldRectangle, out Vector2 newDragWorldTopLeft))
-                    {
-                        Point newGridTopLeft = newDragWorldTopLeft.ToGridPoint();
-
-                        // Clamp at zero.
-                        newGridTopLeft.X = Math.Max(newGridTopLeft.X, 0);
-                        newGridTopLeft.Y = Math.Max(newGridTopLeft.Y, 0);
-
-                        _resize = new(position: newGridTopLeft, gridRectangle.Size);
-                        _targetEntity = id;
-                    }
+                    _dragModeAvailable = true;
                 }
 
                 Point offset = new(lineWidth, lineWidth);
 
-                // Draw a cute area within the rectangle.
+                // Draw a cute area within the gridRectangle.
                 RenderServices.DrawRectangle(
                     render.DebugFxBatch,
                     new Rectangle(gridRectangle.TopLeft * Grid.CellSize + offset, gridRectangle.Size * Grid.CellSize - offset),
@@ -242,7 +396,6 @@ namespace Murder.Editor.Systems
         private Rectangle _currentRectDraw;
         private bool _inputAvailable;
 
-
         /// <summary>
         /// This is the logic for capturing input for new tiles.
         /// </summary>
@@ -256,114 +409,35 @@ namespace Murder.Editor.Systems
                 return false;
             }
 
-            TileGridComponent gridComponent = e.GetTileGrid();
-            TileGrid grid = gridComponent.Grid;
-
             if (editor.EditorHook.CursorWorldPosition is not Point cursorWorldPosition)
             {
                 return false;
             }
 
-            Point cursorGridPosition = cursorWorldPosition.FromWorldToLowerBoundGridPosition();
+            _isPaintTileAvailable = true;
 
-            IntRectangle bounds = gridComponent.Rectangle;
-            if (!bounds.Contains(cursorGridPosition))
-            {
-                if (_startedShiftDragging == null)
-                {
-                    return false;
-                }
-
-                // If we are dragging, clamp the bounds of the current room.
-                if (cursorGridPosition.X < gridComponent.Origin.X)
-                {
-                    cursorGridPosition.X = gridComponent.Origin.X;
-                }
-                else if (cursorGridPosition.X >= bounds.Right)
-                {
-                    cursorGridPosition.X = bounds.Right - 1;
-                }
-
-                if (cursorGridPosition.Y < gridComponent.Origin.Y)
-                {
-                    cursorGridPosition.Y = gridComponent.Origin.Y;
-                }
-                else if (cursorGridPosition.Y >= bounds.Bottom)
-                {
-                    cursorGridPosition.Y = bounds.Bottom - 1;
-                }
-            }
-
-            // We are actually applying operation over an area.
-            if (_startedShiftDragging == null &&
-                Game.Input.Down(MurderInputButtons.Shift) &&
-                (Game.Input.Down(MurderInputButtons.LeftClick) || Game.Input.Down(MurderInputButtons.RightClick)))
-            {
-                _targetEntity = e.EntityId;
-
-                // Start tracking the origin.
-                _startedShiftDragging = cursorGridPosition;
-                _currentRectDraw = (GridHelper.FromTopLeftToBottomRight(_startedShiftDragging.Value, cursorGridPosition) * Grid.CellSize);
-                _dragColor = Game.Input.Down(MurderInputButtons.LeftClick) ? Color.Green * .1f : Color.Red * .05f;
-                _tweenStart = Game.Now;
-            }
-
-            int selectedTileMask = editor.EditorHook.CurrentSelectedTile.ToMask();
             if (_startedShiftDragging != null && _dragColor != null)
             {
-                // Draw the rectangle applied over the area.
-                IntRectangle draggedRectangle = GridHelper.FromTopLeftToBottomRight(_startedShiftDragging.Value, cursorGridPosition);
-                Rectangle targetSize = draggedRectangle * Grid.CellSize;
-                _currentRectDraw = Rectangle.Lerp(_currentRectDraw, targetSize, 0.45f);
-
                 RenderServices.DrawRectangle(render.DebugBatch, _currentRectDraw, _dragColor.Value);
                 RenderServices.DrawRectangleOutline(render.DebugBatch, _currentRectDraw, Color.White * .5f);
-
-                if (Game.Input.Released(MurderInputButtons.LeftClick))
-                {
-                    _startedShiftDragging = null;
-                    grid.SetGridPosition(draggedRectangle, selectedTileMask);
-                }
-                else if (Game.Input.Released(MurderInputButtons.RightClick))
-                {
-                    _startedShiftDragging = null;
-                    grid.UnsetGridPosition(draggedRectangle, selectedTileMask);
-                }
 
                 return true;
             }
 
-            // We are applying an operation over an individual tile.
-            if (!editor.EditorHook.IsMouseOnStage)
+            Color color = Game.Profile.Theme.White.ToXnaColor();
+            color *= .5f;
+
+            TileGridComponent gridComponent = e.GetTileGrid();
+            Point lowerBoundGridPosition = cursorWorldPosition.FromWorldToLowerBoundGridPosition();
+
+            if (FitCursorPositionToGrid(gridComponent, lowerBoundGridPosition) is not Point cursorGridPosition)
             {
                 return false;
             }
 
-            Color color = Game.Profile.Theme.White.ToXnaColor();
-            color = color * .5f;
-
             // Otherwise, we are at classical individual tile selection.
             IntRectangle rectangle = new Rectangle(cursorGridPosition.X, cursorGridPosition.Y, 1, 1);
             RenderServices.DrawRectangleOutline(render.DebugBatch, (rectangle * Grid.CellSize).Expand(4 - 3 * Ease.ZeroToOne(Ease.BackInOut, 0.250f, _tweenStart)), color);
-
-            if (Game.Input.Down(MurderInputButtons.LeftClick))
-            {
-                if (!grid.AtGridPosition(cursorGridPosition).HasFlag(selectedTileMask))
-                {
-                    _tweenStart = Game.Now;
-
-                    grid.SetGridPosition(cursorGridPosition, selectedTileMask);
-                }
-            }
-            else if (Game.Input.Down(MurderInputButtons.RightClick))
-            {
-                if (grid.AtGridPosition(cursorGridPosition).HasFlag(selectedTileMask))
-                {
-                    _tweenStart = Game.Now;
-
-                    grid.UnsetGridPosition(cursorGridPosition, selectedTileMask);
-                }
-            }
 
             return true;
         }
@@ -388,45 +462,6 @@ namespace Murder.Editor.Systems
             }
 
             return true;        
-        }
-
-        private bool GatherMapInfo(RenderContext render, EditorComponent editor, Entity e,
-            out TileGridComponent gridComponent,
-            [NotNullWhen(true)] out TileGrid? grid,
-            out Point cursorGridPosition,
-            out IntRectangle bounds)
-        {
-            gridComponent = default;
-            grid = null;
-            bounds = default;
-            cursorGridPosition = default;
-
-            if (_resize is not null || render.Camera.Zoom < EditorFloorRenderSystem.ZoomThreshold)
-            {
-                // We are currently resizing, we have no business building tiles for now.
-                return false;
-            }
-
-            if (_startedShiftDragging != null && _targetEntity != e.EntityId)
-            {
-                // we have no business just yet.
-                return false;
-            }
-
-            if (!_inputAvailable)
-            {
-                return false;
-            }
-
-            gridComponent = e.GetTileGrid();
-            grid = gridComponent.Grid;
-
-            if (editor.EditorHook.CursorWorldPosition is not Point cursorWorldPosition)
-                return false;
-
-            cursorGridPosition = cursorWorldPosition.FromWorldToLowerBoundGridPosition();
-            bounds = gridComponent.Rectangle;
-            return true;
         }
 
         /// <summary>
@@ -458,6 +493,46 @@ namespace Murder.Editor.Systems
             ImGui.PopID();
 
             return true;
+        }
+
+        /// <returns>Null if cursor is not within the grid nor is dragging.</returns>
+        private Point? FitCursorPositionToGrid(TileGridComponent grid, Point cursorGridPosition)
+        {
+            IntRectangle bounds = grid.Rectangle;
+            if (!bounds.Contains(cursorGridPosition))
+            {
+                if (_startedShiftDragging is null)
+                {
+                    return null;
+                }
+
+                IntRectangle draggedRectangle = GridHelper.FromTopLeftToBottomRight(_startedShiftDragging.Value, cursorGridPosition);
+                if (!bounds.TouchesInside(draggedRectangle))
+                {
+                    return null;
+                }
+
+                // If we are dragging, clamp the bounds of the current room.
+                if (cursorGridPosition.X < grid.Origin.X)
+                {
+                    cursorGridPosition.X = grid.Origin.X;
+                }
+                else if (cursorGridPosition.X >= bounds.Right)
+                {
+                    cursorGridPosition.X = bounds.Right - 1;
+                }
+
+                if (cursorGridPosition.Y < grid.Origin.Y)
+                {
+                    cursorGridPosition.Y = grid.Origin.Y;
+                }
+                else if (cursorGridPosition.Y >= bounds.Bottom)
+                {
+                    cursorGridPosition.Y = bounds.Bottom - 1;
+                }
+            }
+
+            return cursorGridPosition;
         }
     }
 }

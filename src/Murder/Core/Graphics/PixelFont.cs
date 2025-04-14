@@ -250,7 +250,7 @@ public class PixelFontSize
         position = position.Round();
 
         Vector2 offset = Offset;
-        Vector2 justified = new(WidthToNextLine(text, 0, true) * origin.X * scale.X, HeightOf(text) * origin.Y * scale.Y);
+        Vector2 justified = new(Calculator.RoundToInt(WidthToNextLine(text, 0, true) * origin.X * scale.X), HeightOf(text) * origin.Y * scale.Y);
 
         Color currentColor = color;
 
@@ -316,7 +316,7 @@ public class PixelFontSize
                 continue;
             }
 
-            if (visibleCharacters >= 0 && letterIndex > visibleCharacters)
+            if (visibleCharacters >= 0 && letterIndex >= visibleCharacters)
             {
                 break;
             }
@@ -455,10 +455,10 @@ public class PixelFontSize
         {
             bool alreadyHasLineBreak = false;
 
-            int nextSeparatorIndex = lineBreakOnSpace ? text[cursor..].IndexOf(' ') : 1;
+            int nextSeparatorIndex = lineBreakOnSpace ? text[cursor..].IndexOf(' ') : 0;
             int nextLineBreak = text[cursor..].IndexOf('\n');
 
-            if (nextLineBreak >= 0 && nextLineBreak < nextSeparatorIndex)
+            if (nextLineBreak >= 0 && nextLineBreak <= nextSeparatorIndex)
             {
                 alreadyHasLineBreak = true;
                 nextSeparatorIndex = nextLineBreak + cursor;

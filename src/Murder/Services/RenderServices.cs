@@ -135,7 +135,7 @@ public static partial class RenderServices
             for (int y = Calculator.RoundToInt(area.Y); y < area.Bottom; y += texture.Size.Y)
             {
                 Vector2 excess = new(MathF.Max(0, x + texture.Size.X - area.Right), MathF.Max(0, y + texture.Size.Y - area.Bottom));
-                texture.Draw(batch, new Vector2(x, y), new Rectangle(Vector2.Zero, texture.Size - excess), Color.White, Vector2.One, 0, Vector2.Zero, ImageFlip.None, RenderServices.BLEND_NORMAL, sort);
+                texture.Draw(batch, new Vector2(x, y), new Rectangle(Vector2.Zero, texture.Size - excess), Color.White, Vector2.One, 0, Vector2.Zero, ImageFlip.None, RenderServices.BLEND_NORMAL, MurderBlendState.AlphaBlend, sort);
             }
         }
     }
@@ -157,6 +157,7 @@ public static partial class RenderServices
     /// <param name="scale">Scale applied to the sprite.</param>
     /// <param name="color">Color.</param>
     /// <param name="blend">Blend.</param>
+    /// <param name="blendState">Blend state type.</param>
     /// <param name="sort">Sort layer. 0 is in front, 1 is behind</param>
     /// <param name="currentTime">Current time of the game used to render this sprite.</param>
     /// <returns>If the animation is complete or not</returns>
@@ -175,6 +176,7 @@ public static partial class RenderServices
         Vector2 scale,
         Color color,
         Vector3 blend,
+        MurderBlendState blendState,
         float sort,
         float currentTime)
     {
@@ -205,6 +207,7 @@ public static partial class RenderServices
             rotation: rotation,
             imageFlip: imageFlip,
             blend: blend,
+            blendState: blendState,
             sort: sort);
 
         return frameInfo;
@@ -251,6 +254,7 @@ public static partial class RenderServices
             rotation: rotation,
             imageFlip: imageFlip,
             blend: blend,
+            blendState: MurderBlendState.AlphaBlend,
             sort: sort);
 
         return frameInfo;
@@ -265,7 +269,7 @@ public static partial class RenderServices
             {
                 e.PlaySpriteAnimation(s.NextAnimations.RemoveAt(0));
             }
-            
+
             e.SendAnimationCompleteMessage(Messages.AnimationCompleteStyle.Single);
             e.RemoveAnimationComplete();
         }
@@ -321,7 +325,8 @@ public static partial class RenderServices
             drawInfo.ImageFlip,
             drawInfo.Color,
             drawInfo.Origin.ToXnaVector2(),
-            BLEND_NORMAL
+            BLEND_NORMAL,
+            drawInfo.BlendState
             );
     }
 
@@ -338,7 +343,7 @@ public static partial class RenderServices
     public static FrameInfo DrawSprite(this Batch2D batch, Guid assetGuid, Vector2 position, DrawInfo? drawInfo = default)
         => DrawSprite(batch, assetGuid, position, drawInfo ?? DrawInfo.Default, AnimationInfo.Default);
 
-    public static FrameInfo DrawSprite(this Batch2D batch, SpriteAsset asset, Vector2 position, DrawInfo? drawInfo = default) 
+    public static FrameInfo DrawSprite(this Batch2D batch, SpriteAsset asset, Vector2 position, DrawInfo? drawInfo = default)
         => DrawSprite(batch, asset, position, drawInfo ?? DrawInfo.Default, AnimationInfo.Default);
 
     public static FrameInfo DrawSprite(this Batch2D batch, Guid assetGuid, Vector2 position, DrawInfo drawInfo, AnimationInfo animationInfo)
@@ -374,6 +379,7 @@ public static partial class RenderServices
             drawInfo.Scale,
             color,
             wash ? RenderServices.BLEND_WASH : drawInfo.GetBlendMode(),
+            drawInfo.BlendState,
             sort,
             animationInfo.CurrentTime());
 
@@ -474,14 +480,14 @@ public static partial class RenderServices
     }
 
     /// <summary>
-		/// Draws a list of connecting points
-		/// </summary>
-		/// <param name="spriteBatch">The destination drawing surface</param>
-		/// /// <param name="position">Where to position the points</param>
-		/// <param name="points">The points to connect with lines</param>
-		/// <param name="color">The color to use</param>
-		/// <param name="thickness">The thickness of the lines</param>
-		public static void DrawPoints(this Batch2D spriteBatch, Vector2 position, ReadOnlySpan<Vector2> points, Color color, float thickness)
+    /// Draws a list of connecting points
+    /// </summary>
+    /// <param name="spriteBatch">The destination drawing surface</param>
+    /// /// <param name="position">Where to position the points</param>
+    /// <param name="points">The points to connect with lines</param>
+    /// <param name="color">The color to use</param>
+    /// <param name="thickness">The thickness of the lines</param>
+    public static void DrawPoints(this Batch2D spriteBatch, Vector2 position, ReadOnlySpan<Vector2> points, Color color, float thickness)
     {
         if (points.Length < 2)
             return;
@@ -526,6 +532,24 @@ public static partial class RenderServices
         DrawRectangle(spriteBatch, new Rectangle(x, y, line, length), color, sorting);
     }
 
+    public static void DrawRectangle(this Batch2D batch, Rectangle rectangle, DrawInfo drawInfo)
+    {
+        batch.Draw(
+            texture: SharedResources.GetOrCreatePixel(),
+            position: rectangle.TopLeft.ToXnaVector2(),
+            targetSize: Point.One,
+            sourceRectangle: default,
+            sort: drawInfo.Sort,
+            rotation: 0,
+            scale: rectangle.Size.ToXnaVector2(),
+            flip: ImageFlip.None,
+            color: drawInfo.Color,
+            offset: Microsoft.Xna.Framework.Vector2.Zero,
+            drawInfo.GetBlendMode(),
+            drawInfo.BlendState
+            );
+    }
+
     public static void DrawRectangle(this Batch2D batch, Rectangle rectangle, Color color, float sorting = 0)
     {
         batch.Draw(
@@ -539,7 +563,8 @@ public static partial class RenderServices
             flip: ImageFlip.None,
             color: color,
             offset: Microsoft.Xna.Framework.Vector2.Zero,
-            BLEND_COLOR_ONLY
+            BLEND_COLOR_ONLY,
+            MurderBlendState.AlphaBlend // Default blend state
             );
     }
 
@@ -608,10 +633,11 @@ public static partial class RenderServices
                          ImageFlip.None,
                          color,
                          new Microsoft.Xna.Framework.Vector2(0, 0.5f),
-                         BLEND_NORMAL
+                         BLEND_NORMAL,
+                         MurderBlendState.AlphaBlend
                          );
     }
-    
+
     public static void DrawLineShort(this Batch2D spriteBatch, Vector2 point, float length, float angle, Color color, float thickness, float sort = 1f)
     {
         var halfPixel = new Vector2(thickness / 2f, 0);
@@ -626,7 +652,8 @@ public static partial class RenderServices
                          ImageFlip.None,
                          color,
                          new Microsoft.Xna.Framework.Vector2(0, 0.5f),
-                         BLEND_NORMAL
+                         BLEND_NORMAL,
+                         MurderBlendState.AlphaBlend
                          );
     }
 
@@ -651,15 +678,15 @@ public static partial class RenderServices
 
 
     /// <summary>
-		/// Draw a circle
-		/// </summary>
-		/// <param name="spriteBatch">The destination drawing surface</param>
-		/// <param name="center">The center of the circle</param>
-		/// <param name="radius">The radius of the circle</param>
-		/// <param name="sides">The number of sides to generate</param>
-		/// <param name="color">The color of the circle</param>
-		/// <param name="sort">The sorting value</param>
-		public static void DrawCircleOutline(this Batch2D spriteBatch, Vector2 center, float radius, int sides, Color color, float sort = 1f)
+    /// Draw a circle
+    /// </summary>
+    /// <param name="spriteBatch">The destination drawing surface</param>
+    /// <param name="center">The center of the circle</param>
+    /// <param name="radius">The radius of the circle</param>
+    /// <param name="sides">The number of sides to generate</param>
+    /// <param name="color">The color of the circle</param>
+    /// <param name="sort">The sorting value</param>
+    public static void DrawCircleOutline(this Batch2D spriteBatch, Vector2 center, float radius, int sides, Color color, float sort = 1f)
     {
         DrawPoints(spriteBatch, center, GeometryServices.CreateCircle(radius, sides), color, sort);
     }
@@ -709,7 +736,7 @@ public static partial class RenderServices
     }
 
     public static void DrawTextureQuad(Texture2D texture, Rectangle source, Rectangle destination, Matrix matrix, Color color, BlendState blend, Effect? shaderEffect)
-        => DrawTextureQuad(texture, source, destination,matrix, color, blend, shaderEffect, BLEND_NORMAL);
+        => DrawTextureQuad(texture, source, destination, matrix, color, blend, shaderEffect, BLEND_NORMAL);
     public static void DrawTextureQuad(Texture2D texture, Rectangle source, Rectangle destination, Matrix matrix, Color color, BlendState blend, Effect? shaderEffect, Vector3 colorBlend)
     {
         (VertexInfo[] verts, short[] indices) = MakeTexturedQuad(destination, source, new Vector2(texture.Width, texture.Height), color, colorBlend);
@@ -920,12 +947,12 @@ public static partial class RenderServices
             }
         }
     }
-  
+
     public static void DrawPolygon(this Batch2D batch, ImmutableArray<Vector2> vertices, DrawInfo? drawInfo = default)
     {
         batch.DrawPolygon(SharedResources.GetOrCreatePixel(), vertices, drawInfo ?? DrawInfo.Default);
     }
-  
+
     public static void DrawFilledCircle(this Batch2D batch, Vector2 center, float radius, int steps, DrawInfo? drawInfo = default)
     {
         Vector2[] circleVertices = GeometryServices.CreateOrGetFlattenedCircle(1f, 1f, steps);
@@ -972,7 +999,7 @@ public static partial class RenderServices
         // Insert the center point at the beginning
         _cachedPieChartVertices[endIndex] = Point.Lerp(_cachedPieChartVertices[endIndex - 1], _cachedPieChartVertices[endIndex], endFraction);
         _cachedPieChartVertices[startIndex] = center;
-        
+
         // Draw the pie chart
         batch.DrawPolygon(SharedResources.GetOrCreatePixel(), _cachedPieChartVertices[startIndex..(endIndex + 1)], drawInfo ?? DrawInfo.Default);
     }
@@ -997,7 +1024,7 @@ public static partial class RenderServices
     /// <summary>
     /// Draw a simple text. Without line wrapping, color formatting, line splitting or anything fancy.
     /// </summary>
-    public static Point DrawSimpleText(this Batch2D uiBatch, int pixelFont, string text, Vector2 position, DrawInfo drawInfo )
+    public static Point DrawSimpleText(this Batch2D uiBatch, int pixelFont, string text, Vector2 position, DrawInfo drawInfo)
     {
         var font = Game.Data.GetFont(pixelFont);
         return font.DrawSimple(uiBatch, text, position + drawInfo.Origin, drawInfo.Origin, drawInfo.Scale, drawInfo.Sort, drawInfo.Color, drawInfo.Outline, drawInfo.Shadow, drawInfo.Debug);
@@ -1116,7 +1143,7 @@ public static partial class RenderServices
                     lastFrame = next;
 
                     // This animation doesn't loop and we've reached the end, so we're done
-                    if (next == currentAnimation.FrameCount -1)
+                    if (next == currentAnimation.FrameCount - 1)
                     {
                         return false;
                     }
@@ -1125,6 +1152,79 @@ public static partial class RenderServices
             }
         }
         return false;
+    }
+
+    public static string? CheckForEvents(
+        RenderedSpriteCacheComponent? previous, 
+        Guid currentAnimationGuid, 
+        AnimationInfo animationInfo, 
+        FrameInfo frameInfo)
+    {
+        // Check for animation events
+        // First, assume that we are starting a new animation
+        int previousFrame = previous?.LastFrameIndex ?? -1;
+
+        // Make sure we didn't change animations
+        if (previous is null || 
+            previous.Value.RenderedSprite != currentAnimationGuid ||
+            !string.Equals(previous.Value.AnimInfo.Name, animationInfo.Name, StringComparison.InvariantCulture))
+        {
+            // We changed animations, so we need to reset to -1 so we can trigger the first frame event
+            previousFrame = frameInfo.InternalFrame - 1;
+        }
+
+        // Quickly check if we even changed frames, if not, don't bother with events
+        if (frameInfo.InternalFrame != previousFrame)
+        {
+            Animation currentAnimation = frameInfo.Animation;
+
+            if (currentAnimation.Events is null || currentAnimation.Events.Count == 0)
+            {
+                return null;
+            }
+
+            int lastFrame = previousFrame;
+            while (lastFrame != frameInfo.InternalFrame)
+            {
+                // Trigger events on the next frame (most likelly the frame just rendered, uunless there was a major slowdown)
+
+                if (animationInfo.Loop)
+                {
+                    int next = Calculator.WrapAround(lastFrame + 1, 0, currentAnimation.FrameCount - 1);
+
+                    if (currentAnimation.Events.TryGetValue(next, out string? eventName))
+                    {
+                        return eventName;
+                    }
+
+                    lastFrame = next;
+                    if (previousFrame == lastFrame)
+                    {
+                        // We've looped through all the frames and didn't find the previous frame, so we're stuck in a loop or a major slowdown happened
+                        return null;
+                    }
+                }
+                else
+                {
+                    int next = Math.Min(lastFrame + 1, currentAnimation.FrameCount - 1);
+
+                    if (currentAnimation.Events.TryGetValue(next, out string? eventName))
+                    {
+                        return eventName;
+                    }
+
+                    lastFrame = next;
+                    // This animation doesn't loop and we've reached the end, so we're done
+                    if (next == currentAnimation.FrameCount - 1)
+                    {
+                        return null;
+                    }
+
+                }
+            }
+        }
+
+        return null;
     }
 
     #endregion

@@ -239,12 +239,22 @@ public static class StageHelpers
                 }
             }
 
-            if (guidToIdCollection is null)
+            if (guidToIdCollection is null || guidToIdCollection.Value.Collection.Length == 0)
             {
-                return null;
+                foreach (Guid child in selectedEntity.Children)
+                {
+                    foreach (IComponent c in selectedEntity.GetChildComponents(child))
+                    {
+                        if (c is GuidToIdTargetCollectionComponent collection)
+                        {
+                            guidToIdCollection = collection;
+                            break;
+                        }
+                    }
+                }
             }
 
-            return guidToIdCollection.Value.Collection.Select(a => a.Id).ToHashSet();
+            return guidToIdCollection?.Collection.Select(a => a.Id).ToHashSet();
         }
 
         return null;
@@ -388,6 +398,29 @@ public static class StageHelpers
                     AddEventsIfAny(i, ref events, child);
                 }
             }
+        }
+
+        SpriteAsset? sprite = null;
+        if (c is SpriteComponent spriteComponent)
+        {
+            sprite = Game.Data.TryGetAsset<SpriteAsset>(spriteComponent.AnimationGuid);
+        }
+        else if (c is AgentSpriteComponent agentSpriteComponent)
+        {
+            sprite = Game.Data.TryGetAsset<SpriteAsset>(agentSpriteComponent.AnimationGuid);
+        }
+
+        if (sprite is not null)
+        {
+            (_, HashSet<string> spriteEventsForChild) = GetSpriteEventsForAsset(sprite);
+            events ??= [];
+
+            foreach (string e in spriteEventsForChild)
+            {
+                events.Add(e);
+            }
+
+            return;
         }
 
         if (Attribute.GetCustomAttribute(t, typeof(EventMessagesAttribute)) is not EventMessagesAttribute attribute)
