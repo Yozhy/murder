@@ -202,7 +202,7 @@ public partial class Aseprite
                         SEEK(7);
 
                         // We always use all layers, except for layers that are marked as reference layers (which are ignored)
-                        if (loadImageData && !cel.Layer.Flag.HasFlag(Layer.Flags.Reference) && cel.Layer.Name != "REF")
+                        if (loadImageData && cel.Layer.Flag.HasFlag(Layer.Flags.Visible) && !cel.Layer.Flag.HasFlag(Layer.Flags.Reference) && cel.Layer.Name != "REF")
                         {
                             // RAW or DEFLATE
                             if (celType == 0 || celType == 2)
