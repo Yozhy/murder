@@ -1,10 +1,16 @@
-﻿using ImGuiNET;
+﻿using Bang.Diagnostics;
+using ImGuiNET;
 using Murder.Assets;
+using Murder.Assets.Graphics;
 using Murder.Assets.Localization;
 using Murder.Core.Input;
 using Murder.Diagnostics;
+using Murder.Editor.Assets;
 using Murder.Editor.ImGuiExtended;
-using Murder.Services;
+using Murder.Editor.Utilities;
+using Murder.Serialization;
+using System.Collections.Immutable;
+using System.Text;
 using static Murder.Editor.ImGuiExtended.SearchBox;
 
 namespace Murder.Editor.Services;
@@ -15,12 +21,12 @@ internal static class EditorLocalizationServices
     {
         LocalizationAsset localization = Game.Data.GetDefaultLocalization();
 
-        SearchBoxSettings<Guid> settings = new(initialText: "Create localized string") 
-        { 
-            DefaultInitialization  = ("New localized string", Guid.Empty) 
+        SearchBoxSettings<Guid> settings = new(initialText: "Create localized string")
+        {
+            DefaultInitialization = ("New localized string", Guid.Empty)
         };
 
-        Lazy<Dictionary<string, Guid>> candidates = new(() => 
+        Lazy<Dictionary<string, Guid>> candidates = new(() =>
         {
             Dictionary<string, Guid> result = [];
 
@@ -120,6 +126,94 @@ internal static class EditorLocalizationServices
             }
 
             ImGui.EndPopup();
+        }
+    }
+
+    public static FilterLocalizationAsset GetFilterLocalizationAsset()
+    {
+        EditorSettingsAsset settings = Architect.EditorSettings;
+
+        FilterLocalizationAsset? asset = Game.Data.TryGetAsset<FilterLocalizationAsset>(settings.LocalizationFilter);
+        if (asset is null)
+        {
+            foreach ((_, GameAsset a) in Architect.EditorData.FilterAllAssets(typeof(FilterLocalizationAsset)))
+            {
+                asset = (FilterLocalizationAsset)a;
+                break;
+            }
+
+            if (asset is null)
+            {
+                // Otherwise, this means we need to actually create one...
+                asset = new();
+                asset.Name = "_LocFilter";
+
+                Architect.EditorData.SaveAsset(asset);
+            }
+
+            settings.LocalizationFilter = asset.Guid;
+        }
+
+        return asset;
+    }
+
+    public static ImmutableArray<(string, AssetInfoPropertiesForEditor)> GetLocalizationCandidates(string name)
+    {
+        FilterLocalizationAsset? asset = GetFilterLocalizationAsset();
+        return asset.GetLocalizationCandidates(name);
+    }
+
+    public static void PrunNonReferencedStrings(LocalizationAsset localization, string name, bool log)
+    {
+        GameLogger.Log("Starting pruning missing references...");
+
+        ImmutableArray<(string, AssetInfoPropertiesForEditor)> resources = GetLocalizationCandidates(name);
+
+        StringBuilder resource = new();
+        foreach ((string _, AssetInfoPropertiesForEditor info) in resources)
+        {
+            if (!info.IsSelected)
+            {
+                continue;
+            }
+
+            foreach (AssetPropertiesForEditor assetInfo in info.Assets)
+            {
+                if (!assetInfo.Show)
+                {
+                    continue;
+                }
+
+                GameAsset? asset = Game.Data.TryGetAsset(assetInfo.Guid);
+                if (asset is null)
+                {
+                    continue;
+                }
+
+                resource.Append(FileManager.SerializeToJson(asset));
+            }
+        }
+
+        string content = resource.ToString();
+
+        List<Guid> toDelete = [];
+        foreach (LocalizedStringData data in localization.Resources)
+        {
+            if (!content.Contains(data.Guid.ToString()))
+            {
+                toDelete.Add(data.Guid);
+
+                if (log)
+                {
+                    GameLogger.Log($"Pruning {data.String}...");
+                }
+            }
+        }
+
+        foreach (Guid g in toDelete)
+        {
+            localization.FileChanged = true;
+            localization.RemoveResource(g, force: true);
         }
     }
 }

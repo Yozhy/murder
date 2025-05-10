@@ -531,7 +531,17 @@ public static class EntityServices
         int offset = 0,
         Guid? customSprite = null)
     {
-        PlayAnimationOverload(e, [animation], properties, offset, customSprite);
+        ImmutableArray<string> animations;
+        if (properties.HasFlag(AnimationOverloadProperties.Disappear))
+        {
+            animations = [animation, "_"];
+        }
+        else
+        {
+            animations = [animation];
+        }
+
+        PlayAnimationOverload(e, animations, properties, offset, customSprite);
     }
 
     public static void PlayAnimationOverload(
@@ -573,5 +583,6 @@ public enum AnimationOverloadProperties
     /// <summary>
     /// Not implemented yet.
     /// </summary>
-    Once = 0x10000
+    Once = 0x10000,
+    Disappear = Once | 0x100000
 }
