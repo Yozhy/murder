@@ -1,67 +1,82 @@
-﻿using Murder.Assets.Graphics;
+﻿using Murder.Assets;
+using Murder.Assets.Graphics;
 using Murder.Core;
 using Murder.Core.Geometry;
 using Murder.Core.Graphics;
 using Murder.Core.Input;
+using Murder.Diagnostics;
 using Murder.Services.Info;
 using Murder.Utilities;
-using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 using System.Numerics;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Murder.Services;
 
 public static class InputServices
 {
-    public static MenuInfo CreateBindingsMenuInfo(string? exitText)
+    /// <summary>  
+    /// Creates a menu info object for input bindings, allowing customization of player controls.  
+    /// </summary>  
+    /// <param name="exitText">Optional text for the exit option in the menu.</param>  
+    /// <returns>A <see cref="GenericMenuInfo{InputMenuOption}"/> containing the input bindings menu options.</returns>  
+    public static GenericMenuInfo<InputMenuOption> CreateBindingsMenuInfo(string? exitText)
     {
-        var builder = ImmutableArray.CreateBuilder<MenuOption>();
+        var builder = ImmutableArray.CreateBuilder<InputMenuOption>();
 
-        foreach (var id in Game.Input.AllButtons)
+        if (Game.Data.TryGetAsset<InputInformationAsset>(Game.Profile.InputInformation) is not InputInformationAsset inputInformation)
         {
-            var virtualButton = Game.Input.GetOrCreateButton(id);
-
-            string text = $"{id}: ";
-
-            foreach (var button in virtualButton.Buttons)
-            {
-                text += button.ToString();
-            }
-
-            builder.Add(new MenuOption(text));
+            GameLogger.Error("Input information not set in the GameProfile asset!");
+            return new GenericMenuInfo<InputMenuOption>();
         }
 
+        foreach (var buttonInfo in inputInformation.Buttons)
+        {
+            if (!buttonInfo.AllowPlayerCustomization)
+            {
+                continue;
+            }
+
+            var virtualButton = Game.Input.GetOrCreateButton(buttonInfo.ButtonId);
+
+            string text = $"{buttonInfo.LocalizedName}:";
+
+            builder.Add(new InputMenuOption(text, InputMenuOption.InputStyle.Button, buttonInfo.ButtonId));
+        }
+
+        foreach (var axisInfo in inputInformation.Axis)
+        {
+            if (!axisInfo.AllowPlayerCustomization)
+            {
+                continue;
+            }
+            var virtualAxis = Game.Input.GetOrCreateAxis(axisInfo.ButtonId);
+            string text = $"{axisInfo.LocalizedName}:";
+            builder.Add(new InputMenuOption(text, InputMenuOption.InputStyle.Axis, axisInfo.ButtonId));
+        }
 
         if (exitText != null)
         {
-            builder.Add(new MenuOption(exitText));
+            builder.Add(new InputMenuOption(exitText, InputMenuOption.InputStyle.None, null));
         }
 
-
-        return new MenuInfo(builder.DrainToImmutable());
+        return new GenericMenuInfo<InputMenuOption>(builder.ToArray());
     }
 
     public static DrawMenuInfo DrawBindingsMenu(Batch2D batch,
         in Point position,
         in DrawMenuStyle style,
-        in MenuInfo menuInfo,
+        in GenericMenuInfo<InputMenuOption> menuInfo,
         in int maxItemsPerLine,
         int totalMenuWidth,
         float sort = .1f)
     {
         PixelFont font = Game.Data.GetFont(style.Font);
-        int lineHeight = font.LineHeight + style.ExtraVerticalSpace;
-
-        int maxSelectionWidth = 0;
+        int lineHeight = font.LineHeight + style.ExtraVerticalSpace + 11;
 
         Point finalPosition = new(Math.Max(position.X, 0), Math.Max(position.Y, 0));
         Point textFinalPosition = new(Math.Max(position.X, 0), Math.Max(position.Y, 0));
 
-        int collumns = Calculator.CeilToInt(menuInfo.Length / (float)maxItemsPerLine);
+        int collumns = 3;// Math.Max(Calculator.CeilToInt(menuInfo.Length / (float)maxItemsPerLine), 1);
         int itemMaxWidth = (int)(totalMenuWidth / collumns);
 
         Vector2 CalculateText(int line, int column) => new Point(
@@ -69,61 +84,92 @@ public static class InputServices
             Calculator.FloorToInt(lineHeight * (line + 1.25f))) + textFinalPosition;
 
         Vector2 CalculateSelector(int line, int column) => new Point(
-            (column + 0.5f) * itemMaxWidth - (totalMenuWidth / 2f) - 8,
-            lineHeight * (line + 1.5f)) + finalPosition;
+            (column + 0.5f) * itemMaxWidth - (totalMenuWidth / 2f) - 4,
+            lineHeight * (line + 1f) - 4) + finalPosition;
+
+        var infoBindings = Game.Data.GetAsset<InputInformationAsset>(Game.Profile.InputInformation);
 
         for (int i = 0; i < menuInfo.Length; i++)
         {
             int column = Calculator.FloorToInt(i / (float)maxItemsPerLine);
             int line = i % maxItemsPerLine;
+            int x = 0;
 
-            var label = menuInfo.GetOptionText(i);
+            var label = menuInfo.Options[i].Text;
             Vector2 labelPosition = CalculateText(line, column);
 
             Color currentColor;
             Color? currentShadow;
-
-            if (menuInfo.IsEnabled(i))
-            {
-                currentColor = i == menuInfo.Selection ? style.SelectedColor : style.Color;
-                currentShadow = style.Shadow;
-            }
-            else
-            {
-                currentColor = style.Shadow;
-                currentShadow = null;
-            }
+            currentColor = i == menuInfo.Selection ? style.SelectedColor : style.Color;
+            currentShadow = style.Shadow;
 
             Point textSize = RenderServices.DrawText(batch, style.Font, label ?? string.Empty, labelPosition, itemMaxWidth, new DrawInfo(sort)
             {
-                Origin = new Vector2(0,0),
+                Origin = new Vector2(0, 0.5f),
                 Color = currentColor,
                 Shadow = currentShadow,
                 Debug = false
             });
 
-            if (textSize.X > maxSelectionWidth)
+            x += textSize.X + 16;
+
+            if (infoBindings == null)
             {
-                maxSelectionWidth = textSize.X;
+                GameLogger.Error("Input information not set in the GameProfile asset!");
+                continue;
             }
 
-            // We did not implement vertical icon menu with other offsets.
-            if (i < menuInfo.Icons.Length && style.Origin.X == 0)
+            if (menuInfo.Options[i].Id is not int buttonId)
             {
-                float bounceX = i != menuInfo.Selection ? 0 :
-                    Ease.BackOut(Calculator.ClampTime(Game.NowUnscaled - menuInfo.LastMoved, 0.5f)) * 3 - 3;
+                continue;
+            }
 
-                Portrait portrait = menuInfo.Icons[i];
-                if (MurderAssetHelpers.GetSpriteAssetForPortrait(portrait) is (SpriteAsset sprite, string animation))
+            if (menuInfo.Options[i].Style == InputMenuOption.InputStyle.Axis)
+            {
+                var axis = Game.Input.GetOrCreateAxis(buttonId);
+                if (axis == null)
                 {
-                    RenderServices.DrawSprite(
-                        batch,
-                        sprite,
-                        labelPosition - new Point(15 - bounceX, 0),
-                        new DrawInfo(sort: sort),
-                        new AnimationInfo(animation));
+                    continue;
+                }
+                // Draw each individual icon
+                foreach (var inputButton in axis.ButtonAxis)
+                {
+                    // Axis buttons are not implemented yet
                 }
             }
+            else if (Game.Input.GetOrCreateButton(buttonId) is VirtualButton virtualButton)
+            {
+                // Draw each individual icon
+                foreach (var inputButton in virtualButton.Buttons)
+                {
+                    (Portrait? icon, string? extraText) = infoBindings.GetGraphicsFor(inputButton);
+                    Vector2 iconPosition = new Vector2(labelPosition.X + x, labelPosition.Y - 4);
+
+                    if (icon != null)
+                    {
+                        RenderServices.DrawPortrait(batch, icon.Value, iconPosition, new DrawInfo(sort)
+                        {
+                            Color = currentColor,
+                            Outline = currentShadow,
+                            Debug = false
+                        });
+                    }
+
+                    if (extraText != null)
+                    {
+                        Point extraTextSize = RenderServices.DrawText(batch, style.Font, extraText, iconPosition, itemMaxWidth, new DrawInfo(sort)
+                        {
+                            Origin = new Vector2(0.5f, 0.5f),
+                            Color = style.Color,
+                            Shadow = currentShadow,
+                            Debug = false
+                        });
+                    }
+
+                    x += 16;
+                }
+            }
+
         }
 
         // Get the line and collumn of the selector
@@ -143,12 +189,12 @@ public static class InputServices
             easedPosition = Vector2.Lerp(previousSelectorPosition, selectorPosition,
             Ease.Evaluate(Calculator.ClampTime(Game.NowUnscaled - menuInfo.LastMoved, style.SelectorMoveTime), style.Ease));
 
-         return new DrawMenuInfo()
+        return new DrawMenuInfo()
         {
             SelectorPosition = selectorPosition,
             PreviousSelectorPosition = previousSelectorPosition,
             SelectorEasedPosition = easedPosition.Point(),
-            MaximumSelectionWidth = Math.Min(Calculator.RoundToInt(totalMenuWidth/(collumns + 0.5f)), maxSelectionWidth)
+            MaximumSelectionWidth = Calculator.RoundToInt(totalMenuWidth / collumns)
         };
     }
 }
