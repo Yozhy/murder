@@ -1,7 +1,6 @@
 ﻿using Microsoft.Xna.Framework.Input;
 using Murder.Utilities;
 using System.Collections.Immutable;
-using System.Diagnostics;
 
 namespace Murder.Core.Input;
 
@@ -147,6 +146,13 @@ public class VirtualButton : IVirtualInput
         {
             Buttons = Buttons.Add(new InputButton(button));
         }
+    }
+
+    public void DeregisterAll()
+    {
+        Buttons = ImmutableArray<InputButton>.Empty;
+        _lastPressedButton[0] = null;
+        _lastPressedButton[1] = null;
     }
 
     public InputButton LastPressedButton(bool keyboard)

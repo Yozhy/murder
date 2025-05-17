@@ -4,7 +4,6 @@ using Murder.Diagnostics;
 using System.Text;
 using Murder.Serialization;
 using Murder.Assets;
-using System.IO;
 using Murder.Utilities;
 using Murder.Editor.Services;
 
@@ -12,10 +11,17 @@ namespace Murder.Editor.Utilities.Serialization;
 
 internal static class LocalizationExporter
 {
-    public static string GetFullRawLocalizationPath() => Path.Combine(
-        FileHelper.GetPath(
-            Architect.EditorData.EditorSettings.RawResourcesPath),
-            Game.Profile.LocalizationPath);
+    public static string GetFullRawLocalizationPath()
+    {
+#if NO_SOURCE
+
+        return FileHelper.GetPath(Game.Profile.LocalizationPath);
+#endif
+
+        return Path.Combine(FileHelper.GetPath(
+                Architect.EditorData.EditorSettings.RawResourcesPath),
+                Game.Profile.LocalizationPath);
+    }
 
     public static string GetFullRawLocalizationPath(string name) => Path.Combine(
         GetFullRawLocalizationPath(), $"{name}.csv");
@@ -63,6 +69,24 @@ internal static class LocalizationExporter
         // Why, do you ask? Absolutely no reason. It just seemed reasonable that generated strings came later.
         foreach (LocalizationAsset.ResourceDataForAsset dialogueData in target.DialogueResources)
         {
+            // Sometimes, an entire dialogue might have been skipped out and its data has been removed from the resource.
+            // we do a sanity check here.
+            bool hasAnyLineAvailable = false;
+            foreach (LocalizedDialogueData localizedDialogueData in dialogueData.DataResources)
+            {
+                LocalizedStringData? data = target.TryGetResource(localizedDialogueData.Guid);
+                if (data is not null)
+                {
+                    hasAnyLineAvailable = true;
+                    break;
+                }
+            }
+
+            if (!hasAnyLineAvailable)
+            {
+                continue;
+            }
+
             if (Game.Data.TryGetAsset<CharacterAsset>(dialogueData.DialogueResourceGuid) is CharacterAsset characterAsset)
             {
                 if (characterAsset.LocalizationNotes is null)
@@ -160,7 +184,6 @@ internal static class LocalizationExporter
 
                 string translated = tokens.Length > 3 ? tokens[3] : string.Empty;
                 string? notes = tokens.Length > 4 ? tokens[4] : null;
-
                 asset.UpdateOrSetResource(guid, translated, notes);
             }
         }
