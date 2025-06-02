@@ -220,7 +220,7 @@ public class PixelFontSize
         }
 
         RuntimeTextData data = TextDataServices.GetOrCreateText(this, text, new TextSettings() { MaxWidth = maxWidth, Scale = scale });
-        return DrawImpl(data, spriteBatch, position, origin, scale, sort, color, strokeColor, shadowColor, debugBox, visibleCharacters);
+        return DrawImpl(data, spriteBatch, position, origin, scale, sort, color, strokeColor, shadowColor, debugBox, visibleCharacters >= 0 ? visibleCharacters : data.Length);
     }
 
     public Point Draw(RuntimeTextData data, Batch2D spriteBatch, Vector2 position, Vector2 origin, Vector2 scale, int visibleCharacters,
@@ -250,7 +250,7 @@ public class PixelFontSize
         position = position.Round();
 
         Vector2 offset = Offset;
-        Vector2 justified = new(Calculator.RoundToInt(WidthToNextLine(text, 0, true) * origin.X * scale.X), HeightOf(text) * origin.Y * scale.Y);
+        Vector2 justified = new(Calculator.RoundToInt((WidthToNextLine(text, 0, true) - 1) * origin.X * scale.X), HeightOf(text) * origin.Y * scale.Y);
 
         Color currentColor = color;
 
@@ -347,7 +347,7 @@ public class PixelFontSize
                 var texture = Textures[c.Page];
                 Rectangle glyph = c.Glyph;
 
-                if (glitchAmount != 0)
+                if (glitchAmount != 0 && character != ' ')
                 {
                     float seed = (Game.NowUnscaled) % 64 + i;
                     float glitch = glitchAmount * 0.8f;
@@ -485,6 +485,7 @@ public class PixelFontSize
                     {
                         wrappedText.Length--;
                     }
+
                     wrappedText.Append('\n');
                 }
 
@@ -581,7 +582,7 @@ public class PixelFont
             return Point.Zero;
         }
 
-        return _pixelFontSize.Draw(text, spriteBatch, position, alignment, scale, visibleCharacters >= 0 ? visibleCharacters : text.Length,
+        return _pixelFontSize.Draw(text, spriteBatch, position, alignment, scale, visibleCharacters,
             sort, color, strokeColor, shadowColor, maxWidth, debugBox);
     }
 

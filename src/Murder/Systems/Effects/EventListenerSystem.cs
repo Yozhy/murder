@@ -2,6 +2,7 @@
 using Bang.Components;
 using Bang.Contexts;
 using Bang.Entities;
+using Bang.Interactions;
 using Bang.Systems;
 using Murder.Attributes;
 using Murder.Components;
@@ -29,13 +30,16 @@ namespace Murder.Systems.Effects
 
             // Were we actually listening to this particular event?
             ImmutableDictionary<string, SpriteEventInfo> events = entity.GetEventListener().Events;
-            bool canPlay = entity.HasPlayEvenOffScreen() || entity.HasUi() || entity.IsInCamera(world);
+
+            bool alwaysPlay = entity.HasPlayEvenOffScreen() || entity.HasUi();
+            bool canPlay = alwaysPlay || entity.IsInCamera(world);
 
             if (canPlay && events.TryGetValue(animationEvent.Event, out SpriteEventInfo info))
             {
                 // Start doing event actions.
                 if (info.Sound is SoundEventId sound)
                 {
+                    Entity? target = entity;
                     SoundProperties properties = SoundProperties.None;
                     SoundLayer layer = SoundLayer.Sfx;
 
@@ -48,8 +52,20 @@ namespace Murder.Systems.Effects
 
                         entity.SetPlayingPersistedEvent();
                     }
+                    else if (alwaysPlay)
+                    {
+                        target = null;
+                    }
 
-                    _ = SoundServices.Play(sound, entity, layer, properties);
+                    _ = SoundServices.Play(sound, target, layer, properties);
+                }
+
+                if (info.Interactions is ImmutableArray<IInteractiveComponent> interactions)
+                {
+                    foreach (IInteractiveComponent interaction in interactions)
+                    {
+                        interaction.Interact(world, entity, entity);
+                    }
                 }
             }
         }
@@ -97,6 +113,11 @@ namespace Murder.Systems.Effects
                     }
                 }
             }
+        }
+
+        public void OnDeactivated(World world, ImmutableArray<Entity> entities)
+        {
+            OnRemoved(world, entities);
         }
     }
 }

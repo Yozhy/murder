@@ -138,6 +138,8 @@ namespace Murder
 
         public readonly ISoundPlayer SoundPlayer;
 
+        public readonly HapticsManager Haptics;
+
         /// <summary>
         /// Initialized in <see cref="LoadContent"/>.
         /// </summary>
@@ -289,6 +291,8 @@ namespace Murder
         /// </summary>
         protected readonly IMurderGame? _game;
 
+        public IMurderGame? MurderGame => _game;
+
         /// <summary>
         /// Single logger of the game.
         /// </summary>
@@ -341,6 +345,8 @@ namespace Murder
             _playerInput = new PlayerInput();
             SoundPlayer = game?.CreateSoundPlayer() ?? new SoundPlayer();
 
+            Haptics = new HapticsManager();
+
             _game = game;
             _gameData = dataManager;
 
@@ -358,7 +364,11 @@ namespace Murder
         /// </remarks>
         protected override void Initialize()
         {
-            // Register Input
+            World.InitializeLookupComponents(_game?.ComponentsLookup ?? new MurderComponentsLookup());
+
+            // Subscribe events
+            AppDomain.CurrentDomain.ProcessExit += OnClose;
+            AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
 
             // Editor input
             _playerInput.RegisterButton(MurderInputButtons.Debug, Keys.F1);
@@ -642,6 +652,9 @@ namespace Murder
 
             // Update sound logic!
             SoundPlayer.Update();
+
+            // Update haptics
+            Haptics.Update();
         }
         
         /// <summary>
@@ -867,10 +880,23 @@ namespace Murder
         /// </summary>
         protected virtual void ExitGame()
         {
-            _game?.OnExit();
-
-            Microsoft.Xna.Framework.Media.MediaPlayer.Stop();
             base.Exit();
+        }
+
+        protected virtual void OnUnhandledException(object? sender, EventArgs e)
+        {
+            if (e is UnhandledExceptionEventArgs unhandled && unhandled.IsTerminating)
+            {
+                OnClose(sender, e);
+                GameLogger.CaptureCrash();
+            }
+        }
+
+        protected virtual void OnClose(object? sender, EventArgs e)
+        {
+            // right before the game itself closes.
+            Haptics.ClearAll();
+            _game?.OnClose();
         }
     }
 }
