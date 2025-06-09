@@ -1,6 +1,7 @@
 ﻿using Microsoft.Xna.Framework.Input;
 using Murder.Core.Geometry;
 using Murder.Utilities;
+using System;
 using System.Collections.Immutable;
 using System.Numerics;
 
@@ -19,8 +20,8 @@ namespace Murder.Core.Input
 
         public InputButtonAxis?[] _lastPressedButton = new InputButtonAxis?[2];
 
-        public bool Pressed => Down && (IntValue != IntPreviousValue);
-        public bool PressedX => Down && (IntValue.X != IntPreviousValue.X);
+        public bool Pressed => Down && ((IntValue.X != 0 || IntValue.Y != 0) && IntValue != IntPreviousValue);
+        public bool PressedX => Down && (IntValue.X != 0 && IntValue.X != IntPreviousValue.X);
 
         /// <summary>
         /// Like a keyboard, 1 when pressed and then every <see cref="_tickDelay"/>. First tick is <see cref="_firstTickDelay"/>.
@@ -31,7 +32,7 @@ namespace Murder.Core.Input
         /// Like a keyboardkey, true on pressed and then every <see cref="_tickDelay"/>. First tick is <see cref="_firstTickDelay"/>.
         /// </summary>
         public bool TickX => _tickX;
-        public bool PressedY => Down && (IntValue.Y != IntPreviousValue.Y);
+        public bool PressedY => Down && (IntValue.Y != 0 && IntValue.Y != IntPreviousValue.Y);
         /// <summary>
         /// Like a keyboardkey, true on pressed and then every <see cref="_tickDelay"/>. First tick is <see cref="_firstTickDelay"/>.
         /// </summary>
@@ -41,7 +42,7 @@ namespace Murder.Core.Input
         public bool Down { get; private set; } = false;
         public bool Consumed = false;
 
-        private readonly float _firstTickDelay = 0.3f;
+        private readonly float _firstTickDelay = 0.35f;
         private readonly float _tickDelay = 0.15f;
 
         public event Action<InputState>? OnPress;
@@ -54,7 +55,6 @@ namespace Murder.Core.Input
 
         private bool _tickX;
         private bool _tickY;
-
         public void Update(InputState inputState)
         {
             Previous = Down;
@@ -69,16 +69,6 @@ namespace Murder.Core.Input
             {
                 var vector = axis.Check(inputState);
 
-                // use a deadzone to prevent small values from being registered
-                if (MathF.Abs(MathF.Abs(vector.X)) < 0.05f)
-                {
-                    vector = new Vector2(0, vector.Y);
-                }
-                if (MathF.Abs(MathF.Abs(vector.Y)) < 0.05f)
-                {
-                    vector = new Vector2(vector.X, 0);
-                }
-
                 if (vector.HasValue())
                 {
                     Down = true;
@@ -89,14 +79,47 @@ namespace Murder.Core.Input
             }
 
             var lengthSq = Value.LengthSquared();
+            if (lengthSq < 0.0001f)
+            {
+                Value = Vector2.Zero;
+                IntValue = Point.Zero;
+                PressedValue = Point.Zero;
+                _tickX = false;
+                _tickY = false;
+                _pressedXStart = 0;
+                _pressedYStart = 0;
+                _nextXTick = 0;
+                _nextYTick = 0;
+            }
+
             if (lengthSq > 1)
                 Value = Value.Normalized();
 
-            IntValue = new Point(Calculator.PolarSnapToInt(Value.X), Calculator.PolarSnapToInt(Value.Y));
+            // Pick a dominant axis for 4 - way menus
+            // Int value has a big deadzone
+            float deadzone = 0.25f;
+            if (lengthSq > deadzone * deadzone)
+            {
+                float absX = MathF.Abs(Value.X);
+                float absY = MathF.Abs(Value.Y);
+                float diff = MathF.Abs(absX - absY);
+                if (diff < 0.1f)
+                {
+                    IntValue = new Point(MathF.Sign(Value.X), MathF.Sign(Value.Y)); // diagonal
+                }
+                else if (MathF.Abs(Value.X) > MathF.Abs(Value.Y))
+                {
+                    IntValue = new Point(MathF.Sign(Value.X), 0);   // left / right
+                }
+                else
+                {
+                    IntValue = new Point(0, MathF.Sign(Value.Y));   // down / up
+                }
+            }
 
             if (Pressed)
             {
-                PressedValue = new Point(MathF.Sign(Value.X), MathF.Sign(Value.Y));
+                PressedValue = IntValue;
                 if (PressedX)
                 {
                     _pressedXStart = Game.NowUnscaled;
@@ -116,7 +139,7 @@ namespace Murder.Core.Input
             {
                 PressedValue = Point.Zero;
 
-                if (Value.X != 0)
+                if (IntValue.X != 0)
                 {
                     if (!_tickX && _nextXTick < Game.NowUnscaled)
                     {
@@ -129,7 +152,7 @@ namespace Murder.Core.Input
                     }
                 }
 
-                if (Value.Y != 0)
+                if (IntValue.Y != 0)
                 {
                     if (!_tickY && _nextYTick < Game.NowUnscaled)
                     {
@@ -155,8 +178,14 @@ namespace Murder.Core.Input
             Consumed = false;
 
             Value = value;
-            PressedValue = new Point(MathF.Sign(Value.X), MathF.Sign(Value.Y));
-            IntValue = new Point(Calculator.PolarSnapToInt(Value.X), Calculator.PolarSnapToInt(Value.Y));
+
+            // Pick a dominant axis for 4 - way menus
+            if (MathF.Abs(Value.X) > MathF.Abs(Value.Y))
+                IntValue = new Point(MathF.Sign(Value.X), 0);   // left / right
+            else
+                IntValue = new Point(0, MathF.Sign(Value.Y));   // left / right
+
+            PressedValue = IntValue;
 
             if (PressedX)
             {
