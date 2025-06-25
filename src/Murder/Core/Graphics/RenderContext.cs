@@ -256,7 +256,7 @@ public class RenderContext : IDisposable
             height,
             mipMap: false,
             SurfaceFormat.Color,
-            DepthFormat.Depth16,
+            DepthFormat.None,
             0,
             preserveContents ? RenderTargetUsage.PreserveContents : RenderTargetUsage.DiscardContents
         );
@@ -564,11 +564,6 @@ public class RenderContext : IDisposable
     public virtual void Dispose()
     {
         CachedTextTextures.Dispose();
-
-        foreach (var batch in _spriteBatches)
-        {
-            batch?.Dispose();
-        }
 
         _floorBufferTarget?.Dispose();
         _uiTarget?.Dispose();

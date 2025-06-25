@@ -78,6 +78,23 @@ public class EditorSystem : IUpdateSystem, IMurderRenderSystem, IGuiSystem, ISta
 
         ImGui.EndMainMenuBar();
 
+        // Record slowdowns
+        float totalFrameTime = Game.FixedDeltaTime;
+        if (totalFrameTime > 0)
+        {
+            float renderRatio = Game.Instance.RenderTime / totalFrameTime;
+            float updateRatio = Game.Instance.UpdateTime / totalFrameTime;
+            float imguiRatio = Game.Instance.ImGuiRenderTime / totalFrameTime;
+            if (renderRatio + updateRatio + imguiRatio > 1)
+            {
+                SlowDownTracker.Update(renderRatio + updateRatio + imguiRatio - 1f);
+            }
+            else
+            {
+                SlowDownTracker.Update(0f);
+            }
+        }
+
         // FPS Window
         ImGui.SetNextWindowBgAlpha(Calculator.Lerp(0.5f, 1f, _hovered));
         if (ImGui.Begin("Insights", ImGuiWindowFlags.AlwaysAutoResize))
@@ -90,10 +107,7 @@ public class EditorSystem : IUpdateSystem, IMurderRenderSystem, IGuiSystem, ISta
                 {
                     ImGui.SeparatorText("Performance");
                     ImGui.Text($"FPS: {_frameRate.Value}");
-                    ImGui.Text($"Update: {Game.Instance.UpdateTime:00.00} ({Game.Instance.LongestUpdateTime:00.00})");
-                    ImGui.Text($"Render: {Game.Instance.RenderTime:00.00} ({Game.Instance.LongestRenderTime:00.00})");
-                    ImGui.Text($"Entities: {context.World.EntityCount}");
-
+                    PlotSlowdowGraph();
 
                     ImGui.SeparatorText("Window Scale");
                     if (ImGui.Button("1x"))
@@ -215,15 +229,87 @@ public class EditorSystem : IUpdateSystem, IMurderRenderSystem, IGuiSystem, ISta
 
                     ImGui.EndTabItem();
                 }
-                
+
                 if (ImGui.BeginTabItem("Details"))
                 {
                     ImGui.SeparatorText("Performance");
+                    var dl = ImGui.GetWindowDrawList();
 
+                    // To calculate FPS from LastFrameDuration (in seconds), use the formula: FPS = 1 / LastFrameDuration.
                     ImGui.Text($"FPS: {_frameRate.Value}");
-                    ImGui.Text($"Update: {Game.Instance.UpdateTime:00.00} ({Game.Instance.LongestUpdateTime:00.00})");
-                    ImGui.Text($"Render: {Game.Instance.RenderTime:00.00} ({Game.Instance.LongestRenderTime:00.00})");
-                    ImGui.Text($"Entities: {context.World.EntityCount}");
+
+                    ImGui.Text($"   Render: {Game.Instance.RenderTime * 1000:00.00} ({Game.Instance.LongestRenderTime * 1000:00.00})");
+                    dl.AddCircleFilled(ImGui.GetItemRectMin() + new Vector2(10, 6), 5, Color.ToUint(Game.Profile.Theme.White), 12);
+
+                    ImGui.Text($"   Update: {Game.Instance.UpdateTime * 1000:00.00} ({Game.Instance.LongestUpdateTime * 1000:00.00})");
+                    dl.AddCircleFilled(ImGui.GetItemRectMin() + new Vector2(10, 6), 5, Color.ToUint(Game.Profile.Theme.HighAccent), 12);
+
+                    ImGui.Text($"   ImGui: {Game.Instance.ImGuiRenderTime * 1000:00.00}");
+                    dl.AddCircleFilled(ImGui.GetItemRectMin() + new Vector2(10, 6), 5, Color.ToUint(Game.Profile.Theme.Yellow), 12);
+
+                    ImGui.Text($"   Sound: {Game.Instance.SoundUpdateTime * 1000:00.00}");
+                    dl.AddCircleFilled(ImGui.GetItemRectMin() + new Vector2(10, 6), 5, Color.ToUint(Game.Profile.Theme.Green), 12);
+
+                    ImGui.Text($"Total: {Game.Instance.LastFrameDuration * 1000:00.00}");
+
+                    ImGui.Dummy(new Vector2(0, 24));
+                    Vector2 start = ImGui.GetItemRectMin();
+                    Vector2 end = ImGui.GetItemRectMax();
+                    Vector2 availableSize = ImGui.GetContentRegionAvail();
+                    // Draw a border around the frame insight area
+                    dl.AddRect(start, new Vector2(start.X + availableSize.X, end.Y), Color.ToUint(Game.Profile.Theme.Faded), 0f, ImDrawFlags.None, 1f);
+
+                    // Draw Update, Render in proportion to the total frame time
+                    if (totalFrameTime > 0)
+                    {
+                        float renderRatio = Game.Instance.RenderTime / totalFrameTime;
+                        float updateRatio = Game.Instance.UpdateTime / totalFrameTime;
+                        float imguiRatio = Game.Instance.ImGuiRenderTime / totalFrameTime;
+                        float soundRatio = Game.Instance.SoundUpdateTime / totalFrameTime;
+
+                        float excess = renderRatio + updateRatio + imguiRatio + soundRatio - 1f;
+
+                        if (excess > 0)
+                        {
+                            // If the ratios exceed 1, we need to adjust them to fit within the available space
+                            float totalRatio = renderRatio + updateRatio + imguiRatio;
+                            renderRatio /= totalRatio;
+                            updateRatio /= totalRatio;
+                            imguiRatio /= totalRatio;
+                            soundRatio /= totalRatio;
+                        }
+
+                        float renderEnd = start.X + availableSize.X * renderRatio;
+                        float updateEnd = start.X + availableSize.X * (renderRatio + updateRatio);
+                        float imguiEnd = start.X + availableSize.X * (renderRatio + updateRatio + imguiRatio);
+                        float soundEnd = start.X + availableSize.X * (renderRatio + updateRatio + imguiRatio + soundRatio);
+
+                        if (renderEnd - start.X >= 1)
+                        {
+                            dl.AddRectFilled(new Vector2(start.X, start.Y), new Vector2(renderEnd, end.Y), Color.ToUint(Game.Profile.Theme.White), 4f);
+                        }
+
+                        if (updateEnd - renderEnd >= 1)
+                        {
+                            dl.AddRectFilled(new Vector2(renderEnd, start.Y), new Vector2(updateEnd, end.Y), Color.ToUint(Game.Profile.Theme.HighAccent), 4f);
+                        }
+
+                        if (imguiEnd - updateEnd >= 1)
+                        {
+                            dl.AddRectFilled(new Vector2(updateEnd, start.Y), new Vector2(imguiEnd, end.Y), Color.ToUint(Game.Profile.Theme.Yellow), 4f);
+                        }
+                        if (soundEnd - imguiEnd >= 1)
+                        {
+                            dl.AddRectFilled(new Vector2(imguiEnd, start.Y), new Vector2(soundEnd, end.Y), Color.ToUint(Game.Profile.Theme.Green), 4f);
+                        }
+
+                        if (excess > 0)
+                        {
+                            // If the render and update ratios exceed 1, draw the overflow in red as a small bar under the frame insight area
+                            float overflowRatio = Calculator.Clamp01(excess);
+                            dl.AddRectFilled(new Vector2(start.X, end.Y - 10), new Vector2(start.X + availableSize.X * overflowRatio, end.Y), Color.ToUint(Game.Profile.Theme.Red), 0);
+                        }
+                    }
 
                     ImGui.Separator();
                     PlotDeltaTimeGraph();
@@ -265,6 +351,27 @@ public class EditorSystem : IUpdateSystem, IMurderRenderSystem, IGuiSystem, ISta
 
                     ImGui.EndTabItem();
                 }
+                if (ImGui.BeginTabItem("Snapshots"))
+                {
+                    if (ImGui.Button("Snapshot (Single)"))
+                    {
+                        DebugSnapshot.TakeSnapShot(1);
+                    }
+
+                    if (ImGui.Button("Snapshot (30)"))
+                    {
+                        DebugSnapshot.TakeSnapShot(30);
+                    }
+
+                    if (ImGui.Button("Snapshot (120)"))
+                    {
+                        DebugSnapshot.TakeSnapShot(120);
+                    }
+
+                    ImGui.TextColored(Game.Profile.Theme.White, $"{DebugSnapshot.GetTotalTime()}");
+
+                    ImGuiHelpers.DrawBarsGraph(DebugSnapshot.GetAllEntries(), 20);
+                }
 
                 ImGui.EndTabBar();
             }
@@ -272,11 +379,11 @@ public class EditorSystem : IUpdateSystem, IMurderRenderSystem, IGuiSystem, ISta
 
         if (ImGui.IsWindowHovered())
         {
-            _hovered = Calculator.Approach(_hovered, 1, Game.DeltaTime * 5);
+            _hovered = Calculator.Approach(_hovered, 1, Game.Instance.LastFrameDuration * 5);
         }
         else
         {
-            _hovered = Calculator.Approach(_hovered, 0, Game.DeltaTime * 5);
+            _hovered = Calculator.Approach(_hovered, 0, Game.Instance.LastFrameDuration * 5);
         }
 
         ImGui.End();
@@ -320,7 +427,7 @@ public class EditorSystem : IUpdateSystem, IMurderRenderSystem, IGuiSystem, ISta
 
     public void Update(Context context)
     {
-        _frameRate.Update(Game.DeltaTime);
+        _frameRate.Update(Game.Instance.LastFrameDuration);
 
         MonoWorld world = (MonoWorld)context.World;
         EditorHook hook = context.World.GetUnique<EditorComponent>().EditorHook;
@@ -395,22 +502,98 @@ public class EditorSystem : IUpdateSystem, IMurderRenderSystem, IGuiSystem, ISta
         }
     }
 
+    private int _previousGCGen1Count = 0;
+    private int _previousGCGen2Count = 0;
+    /// <summary>
+    /// Only updated byt the EditorSystem
+    /// </summary>
+    public static UpdateTimeTracker GcTracker = new();
+    public static UpdateTimeTracker SlowDownTracker = new();
     private void PlotDeltaTimeGraph()
     {
         // TODO: Get more meaningful information from this...
         int gen1Count = GC.CollectionCount(generation: 1);
         int gen2Count = GC.CollectionCount(generation: 2);
+        if (gen2Count != _previousGCGen2Count)
+        {
+            _previousGCGen2Count = gen2Count;
+            GcTracker.Update(1f);
+        }
+        else if (gen1Count != _previousGCGen1Count)
+        {
+            _previousGCGen1Count = gen1Count;
+            GcTracker.Update(0.5f);
+        }
+        else
+        {
+            GcTracker.Update(0f);
+        }
+        if (Game.IsRunningSlowly)
+        {
+            ImGui.TextColored(Game.Profile.Theme.Red, "Running slowly!");
+        }
+
+        PlotSlowdowGraph();
+
+        ImGui.PlotHistogram("##GC_histogram", ref GcTracker.Sample[0], GcTracker.Length, 0, "GC Collection", 0, 1000, new Vector2(ImGui.GetContentRegionAvail().X, 20));
 
         // ImGui.Text($"Gen 1/Gen 2 GC Count: {gen1Count}, {gen2Count}");
-        UpdateTimeTracker tracker = Game.TimeTrackerDiagnoostics;
+        UpdateTimeTracker tracker = Game.TimeTrackerDiagnostics;
+        UpdateTimeTracker renderTracker = Game.RenderTimeTrackerDiagnostics;
+        UpdateTimeTracker gcTracker = Game.RenderTimeTrackerDiagnostics;
         if (tracker.Length >= 0)
         {
-            ImGui.PlotHistogram("##fps_histogram", ref tracker.Sample[0], tracker.Length, 0, "Delta Time Tracker (ms)", 0, Game.FixedDeltaTime * 1.5f * 1000, new Vector2(ImGui.GetContentRegionAvail().X, 80));
+            ImGui.PlotHistogram("##fps_histogram", ref tracker.Sample[0], tracker.Length, 0, "Systems Time Tracker (ms)", 0, Game.FixedDeltaTime * 1.25f * 1000, new Vector2(ImGui.GetContentRegionAvail().X, 80));
+            ImGui.PlotHistogram("##render_histogram", ref renderTracker.Sample[0], renderTracker.Length, 0, "Render Time Tracker (ms)", 0, Game.FixedDeltaTime * 0.5f * 1000, new Vector2(ImGui.GetContentRegionAvail().X, 80));
+            (float low, float median, float high) = GetHighLowAndMedian(tracker);
+            ImGui.Text($"Fastest Update Time: {low:0.00} ms");
+            ImGui.Text($"Median Update Time: {median:0.00} ms");
+            ImGui.Text($"Slowest Update Time: {high:0.00} ms");
         }
         else
         {
             ImGui.Text($"Graph is empty. Is DIAGNOSTICS_MODE enabled?");
         }
-
     }
+
+    private static void PlotSlowdowGraph()
+    {
+        ImGui.PushStyleColor(ImGuiCol.PlotHistogram, Game.Profile.Theme.Red);
+        ImGui.PlotHistogram("##Slowdown History", ref SlowDownTracker.Sample[0], SlowDownTracker.Length, 0, "Slowdowns", 0, 1000, new Vector2(ImGui.GetContentRegionAvail().X, 20));
+        ImGui.PopStyleColor();
+    }
+
+    private (float low, float median, float high) GetHighLowAndMedian(UpdateTimeTracker tracker)
+    {
+        float[] samples = tracker.Sample;
+        int length = tracker.Length;
+
+        if (length <= 0 || samples == null || samples.Length < length)
+            return (0f, 0f, 0f);
+
+        // Copy only the valid samples
+        float[] validSamples = new float[length];
+        Array.Copy(samples, validSamples, length);
+
+        // Sort to compute median and get min/max
+        Array.Sort(validSamples);
+        float low = validSamples[0];
+        float high = validSamples[length - 1];
+        float median;
+
+        if (length % 2 == 0)
+        {
+            // Even number of elements
+            median = (validSamples[length / 2 - 1] + validSamples[length / 2]) / 2f;
+        }
+        else
+        {
+            // Odd number of elements
+            median = validSamples[length / 2];
+        }
+
+        return (low, median, high);
+    }
+
+
 }

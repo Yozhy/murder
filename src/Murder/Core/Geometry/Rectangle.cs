@@ -177,6 +177,19 @@ public struct Rectangle : IEquatable<Rectangle>
                other.Top <= Bottom &&
                Top <= other.Bottom;
     }
+    /// <summary>
+    /// Gets whether or not the other <see cref="Rectangle"/> intersects with this rectangle, taking an offset into account.
+    /// </summary>
+    /// <param name="other"></param>
+    /// <param name="offset"></param>
+    /// <returns></returns>
+    public bool TouchesAt(Rectangle other, Vector2 offset)
+    {
+        return other.Left + offset.X <= Right &&
+               Left + offset.X <= other.Right &&
+               other.Top + offset.Y <= Bottom &&
+               Top + offset.Y <= other.Bottom;
+    }
 
     /// <summary>
     /// Gets whether or not the other <see cref="Rectangle"/> intersects with this rectangle.
@@ -323,4 +336,17 @@ public struct Rectangle : IEquatable<Rectangle>
         }
     }
 
+
+    /// <summary>
+    /// Checks if this rectangle intersects with another rectangle, taking an offset into account.
+    /// </summary>
+    /// <param name="rectangle"></param>
+    /// <param name="offset"></param>
+    internal bool Intersects(Rectangle rectangle, Vector2 offset)
+    {
+        return rectangle.Left + offset.X < Right &&
+               Left + offset.X < rectangle.Right &&
+               rectangle.Top + offset.Y < Bottom &&
+               Top + offset.Y < rectangle.Bottom;
+    }
 }

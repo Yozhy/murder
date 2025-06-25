@@ -13,6 +13,10 @@ namespace Murder.Core.Geometry
         {
             return new(addPosition.X + Offset.X - Radius * 1.25f, addPosition.Y + Offset.Y - Radius, Radius * 2.5f, Radius * 2);
         }
+        public Rectangle Rectangle()
+        {
+            return new(Offset.X - Radius * 1.25f, Offset.Y - Radius, Radius * 2.5f, Radius * 2);
+        }
 
         public Rectangle GetBoundingBox()
         {
@@ -52,18 +56,18 @@ namespace Murder.Core.Geometry
         {
             _polygonCache ??= new PolygonShape(
                 new Polygon(
-                        new Vector2[] {
-                            new(Offset.X, Offset.Y - Radius),
-                            new(Offset.X + Radius * 0.75f, Offset.Y - Radius * 0.75f),
-                            new(Offset.X + Radius * 1.25f, Offset.Y),
-                            new(Offset.X + Radius* 0.75f, Offset.Y + Radius * 0.75f),
-                            new(Offset.X, Offset.Y + Radius),
-                            new(Offset.X - Radius* 0.75f, Offset.Y + Radius * 0.75f),
-                            new(Offset.X - Radius * 1.25f, Offset.Y),
-                            new(Offset.X - Radius * 0.75f, Offset.Y - Radius * 0.75f),
-                        }
-                    )
-                );
+                [
+                    new(Offset.X, Offset.Y - Radius),
+                    new(Offset.X + Radius * 0.75f, Offset.Y - Radius * 0.75f),
+                    new(Offset.X + Radius * 1.25f, Offset.Y),
+                    new(Offset.X + Radius* 0.75f, Offset.Y + Radius * 0.75f),
+                    new(Offset.X, Offset.Y + Radius),
+                    new(Offset.X - Radius* 0.75f, Offset.Y + Radius * 0.75f),
+                    new(Offset.X - Radius * 1.25f, Offset.Y),
+                    new(Offset.X - Radius * 0.75f, Offset.Y - Radius * 0.75f)
+                ])
+            );
+
             return _polygonCache.Value;
         }
     }

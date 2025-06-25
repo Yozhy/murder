@@ -359,7 +359,7 @@ namespace Murder.Services
                                 break;
                             case PolygonShape polygon:
                                 {
-                                    if (polygon.Polygon.AddPosition(position.Point).Intersects(line, out Vector2 hitPoint))
+                                    if (polygon.Polygon.Intersects(line.AddPosition(-position.Point), out Vector2 hitPoint))
                                     {
                                         CompareShapeHits(startPosition, ref hit, ref hitSomething, ref closest, e, hitPoint.Point());
 
@@ -988,15 +988,15 @@ namespace Murder.Services
         public static bool CollidesWith(Entity entityA, Entity entityB)
         {
             if (entityA.TryGetCollider() is ColliderComponent colliderA
-                && entityA.TryGetTransform() is IMurderTransformComponent positionA
+                && entityA.GetGlobalPositionIfValid() is Vector2 positionA
                 && entityB.TryGetCollider() is ColliderComponent colliderB
-                && entityB.TryGetTransform() is IMurderTransformComponent positionB)
+                && entityB.GetGlobalPositionIfValid() is Vector2 positionB)
             {
                 foreach (var shapeA in colliderA.Shapes)
                 {
                     foreach (var shapeB in colliderB.Shapes)
                     {
-                        if (CollidesWith(shapeA, positionA.GetGlobal().Point, shapeB, positionB.GetGlobal().Point))
+                        if (CollidesWith(shapeA, positionA.Point(), shapeB, positionB.Point()))
                             return true;
                     }
                 }
@@ -1135,16 +1135,15 @@ namespace Murder.Services
                 {
                     Rectangle circle;
                     Polygon polygon;
-
                     if (shape1 is PolygonShape)
                     {
-                        polygon = ((PolygonShape)shape1).Polygon.AddPosition(position1);
-                        circle = ((LazyShape)shape2).Rectangle(position2);
+                        polygon = ((PolygonShape)shape1).Polygon;
+                        circle = ((LazyShape)shape2).Rectangle(position1 - position2);
                     }
                     else
                     {
-                        polygon = ((PolygonShape)shape2).Polygon.AddPosition(position2);
-                        circle = ((LazyShape)shape1).Rectangle(position1);
+                        polygon = ((PolygonShape)shape2).Polygon;
+                        circle = ((LazyShape)shape1).Rectangle(position2 - position1);
                     }
 
                     return polygon.Intersect(circle);
@@ -1379,13 +1378,13 @@ namespace Murder.Services
 
                     if (shape1 is PolygonShape)
                     {
-                        polygon = ((PolygonShape)shape1).Polygon.AddPosition(position1);
-                        point = ((PointShape)shape2).Point + position2;
+                        polygon = ((PolygonShape)shape1).Polygon;
+                        point = ((PointShape)shape2).Point + position2 - position1;
                     }
                     else
                     {
-                        polygon = ((PolygonShape)shape2).Polygon.AddPosition(position2);
-                        point = ((PointShape)shape1).Point + position1;
+                        polygon = ((PolygonShape)shape2).Polygon;
+                        point = ((PointShape)shape1).Point + position1 - position2;
                     }
                     return polygon.Contains(point);
                 }
@@ -1399,13 +1398,13 @@ namespace Murder.Services
 
                     if (shape1 is PolygonShape)
                     {
-                        polygon = ((PolygonShape)shape1).Polygon.AddPosition(position1);
-                        circle = ((CircleShape)shape2).Circle.AddPosition(position2);
+                        polygon = ((PolygonShape)shape1).Polygon;
+                        circle = ((CircleShape)shape2).Circle.AddPosition(position2 - position1);
                     }
                     else
                     {
-                        polygon = ((PolygonShape)shape2).Polygon.AddPosition(position2);
-                        circle = ((CircleShape)shape1).Circle.AddPosition(position1);
+                        polygon = ((PolygonShape)shape2).Polygon;
+                        circle = ((CircleShape)shape1).Circle.AddPosition(position1 - position2);
                     }
 
                     return polygon.Intersect(circle);
@@ -1422,13 +1421,13 @@ namespace Murder.Services
 
                     if (shape1 is PolygonShape)
                     {
-                        polygon = ((PolygonShape)shape1).Polygon.AddPosition(position1);
-                        line = ((LineShape)shape2).LineAtPosition(position2);
+                        polygon = ((PolygonShape)shape1).Polygon;
+                        line = ((LineShape)shape2).LineAtPosition(position2 - position1);
                     }
                     else
                     {
-                        polygon = ((PolygonShape)shape2).Polygon.AddPosition(position1);
-                        line = ((LineShape)shape1).LineAtPosition(position1);
+                        polygon = ((PolygonShape)shape2).Polygon;
+                        line = ((LineShape)shape1).LineAtPosition(position1 - position2);
                     }
 
                     return polygon.Intersects(line, out _);
@@ -1443,13 +1442,13 @@ namespace Murder.Services
 
                     if (shape1 is PolygonShape)
                     {
-                        polygon = ((PolygonShape)shape1).Polygon.AddPosition(position1);
-                        rectangle = ((BoxShape)shape2).Rectangle.AddPosition(position2);
+                        polygon = ((PolygonShape)shape1).Polygon;
+                        rectangle = ((BoxShape)shape2).Rectangle.AddPosition(position2 - position1);
                     }
                     else
                     {
-                        polygon = ((PolygonShape)shape2).Polygon.AddPosition(position2);
-                        rectangle = ((BoxShape)shape1).Rectangle.AddPosition(position1);
+                        polygon = ((PolygonShape)shape2).Polygon;
+                        rectangle = ((BoxShape)shape1).Rectangle.AddPosition(position1 - position2);
                     }
 
                     return polygon.Intersect(rectangle);
@@ -1459,8 +1458,7 @@ namespace Murder.Services
             { // Polygon vs. Polygon
                 if (shape1 is PolygonShape poly1 && shape2 is PolygonShape poly2)
                 {
-                    return poly1.Polygon.AddPosition(position1)
-                        .CheckOverlap(poly2.Polygon.AddPosition(position2));
+                    return poly1.Polygon.CheckOverlapAt(poly2.Polygon, position1 - position2);
                 }
             }
 
@@ -1696,13 +1694,13 @@ namespace Murder.Services
             var coneEndMin = coneStart + new Vector2(range, 0).Rotate(angle - angleRange / 2f);
             var coneEndMax = coneStart + new Vector2(range, 0).Rotate(angle + angleRange / 2f);
 
-            var polygon = new Polygon(new Vector2[] {
+            var polygon = new Polygon([
                 coneStart1.Point(),
                 coneEndMin.Point(),
                 coneEnd.Point(),
                 coneEndMax.Point(),
                 coneStart2.Point()
-            });
+            ]);
 
             Rectangle boundingBox = polygon.GetBoundingBox();
 
@@ -1738,7 +1736,7 @@ namespace Murder.Services
                     }
                     else if (otherShape is PolygonShape poly)
                     {
-                        if (polygon.CheckOverlap(poly.Polygon.AddPosition(otherPosition)))
+                        if (polygon.CheckOverlapAt(poly.Polygon, otherPosition - coneStart))
                             yield return other.EntityInfo;
                     }
                     else if (otherShape is CircleShape circle)

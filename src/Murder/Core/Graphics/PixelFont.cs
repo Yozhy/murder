@@ -195,10 +195,12 @@ public class PixelFontSize
         return currentLineWidth;
     }
 
-    public float HeightOf(string text)
+    public float HeightOf(ReadOnlySpan<char> text)
     {
-        if (string.IsNullOrEmpty(text))
+        if (text.Length == 0)
+        {
             return 0;
+        }
 
         int lines = 1;
         if (text.IndexOf('\n') >= 0)
@@ -296,12 +298,27 @@ public class PixelFontSize
                 }
             }
 
-            // i don't think we need this anymore?
-            //bool isPostAddedLineEnding = letter?.Properties is not RuntimeLetterPropertiesFlag properties ||
-            //    !properties.HasFlag(RuntimeLetterPropertiesFlag.DoNotSkipLineEnding);
+            if (character == TextDataServices.SPECIAL_BREAK_WORD_CHARACTER)
+            {
+                continue;
+            }
 
             if (character == '\n')
             {
+                // If this is *not* a language that does new line over spaces, we'll need to manually
+                // take into account the new line as a character that was introduced, instead of replaced within the
+                // space character.
+                if (!LocalizationServices.IsTextWrapOnlyOnSpace())
+                {
+                    bool isPostAddedLineEnding = letter?.Properties is not RuntimeLetterPropertiesFlag properties ||
+                        !properties.HasFlag(RuntimeLetterPropertiesFlag.DoNotSkipLineEnding);
+
+                    if (isPostAddedLineEnding)
+                    {
+                        letterIndex--;
+                    }
+                }
+
                 currentWidth = 0;
 
                 lineCount++;
@@ -449,47 +466,105 @@ public class PixelFontSize
 
         bool lineBreakOnSpace = LocalizationServices.IsTextWrapOnlyOnSpace();
 
-        StringBuilder wrappedText = new StringBuilder();
         int cursor = 0;
+        StringBuilder wrappedText = new();
+
         while (cursor < text.Length)
         {
+            bool appendWordPriorToNewLine = false;
+
+            ReadOnlySpan<char> word = [];
+            bool overflow = false;
+            float wordWidth = 0;
+
             bool alreadyHasLineBreak = false;
 
-            int nextSeparatorIndex = lineBreakOnSpace ? text[cursor..].IndexOf(' ') : 0;
-            int nextLineBreak = text[cursor..].IndexOf('\n');
+            int nextSeparatorIndex = 0;
 
+            if (!lineBreakOnSpace)
+            {
+                int breakpointWord = text[cursor..].IndexOf(TextDataServices.SPECIAL_BREAK_WORD_CHARACTER);
+                if (breakpointWord != -1)
+                {
+                    // before we decide whether we use this, check if the remaining of the string will overflow.
+                    word = text.Slice(cursor, text.Length - cursor);
+                    wordWidth = WidthToNextLine(word, 0, true) * scale;
+
+                    bool overflowToEndOfLine = offset.X + wordWidth > maxWidth;
+                    if (overflowToEndOfLine)
+                    {
+                        // okay, it's going to overflow. so now, check whether the next line break
+                        // will solve this, or if it'll overflow anyway.
+                        word = text.Slice(cursor, breakpointWord);
+                        wordWidth = WidthToNextLine(word, 0, true) * scale;
+
+                        overflowToEndOfLine = offset.X + wordWidth > maxWidth;
+                        if (!overflowToEndOfLine)
+                        {
+                            overflow = true;
+                            appendWordPriorToNewLine = true;
+
+                            nextSeparatorIndex = breakpointWord;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                nextSeparatorIndex = text[cursor..].IndexOf(' ');
+            }
+
+            int nextLineBreak = text[cursor..].IndexOf('\n');
             if (nextLineBreak >= 0 && nextLineBreak <= nextSeparatorIndex)
             {
                 alreadyHasLineBreak = true;
-                nextSeparatorIndex = nextLineBreak + cursor;
+                nextSeparatorIndex = nextLineBreak;
             }
-            else if (nextSeparatorIndex >= 0)
+
+            if (nextSeparatorIndex == -1 || nextSeparatorIndex + cursor >= text.Length - 1)
             {
-                nextSeparatorIndex = nextSeparatorIndex + cursor;
+                nextSeparatorIndex = text.Length - 1 - cursor;
             }
 
-            if (nextSeparatorIndex == -1 || nextSeparatorIndex >= text.Length - 1)
-                nextSeparatorIndex = text.Length - 1;
-
-            ReadOnlySpan<char> word = text.Slice(cursor, nextSeparatorIndex - cursor + 1);
-            float wordWidth = WidthToNextLine(word, 0, true) * scale;
-            bool overflow = offset.X + wordWidth > maxWidth;
+            if (!overflow)
+            {
+                word = text.Slice(cursor, nextSeparatorIndex + 1);
+                wordWidth = WidthToNextLine(word, 0, true) * scale;
+                overflow = offset.X + wordWidth > maxWidth;
+            }
 
             if (overflow)
             {
-                // Has overflow, word is going down.
-                if (wrappedText.Length != 0)
+                bool applyLineBreak = true;
+                if (!lineBreakOnSpace && IsPonctuation(text[cursor]))
                 {
-                    // Trim wrapped text of any whitespace at the end.
-                    while (wrappedText.Length > 0 && wrappedText[^1] == ' ')
-                    {
-                        wrappedText.Length--;
-                    }
-
-                    wrappedText.Append('\n');
+                    // If this is a ponctuation right at the end of the sentence or before a new line,
+                    // we should be okay overflowing. It's better than the alternative.
+                    applyLineBreak = false;
                 }
 
-                offset.X = wordWidth;
+                if (applyLineBreak)
+                {
+                    if (appendWordPriorToNewLine)
+                    {
+                        wrappedText.Append(word);
+                        wordWidth = 0;
+                    }
+
+                    // Has overflow, word is going down.
+                    if (wrappedText.Length != 0)
+                    {
+                        // Trim wrapped text of any whitespace at the end.
+                        while (wrappedText.Length > 0 && wrappedText[^1] == ' ')
+                        {
+                            wrappedText.Length--;
+                        }
+
+                        wrappedText.Append('\n');
+                    }
+
+                    offset.X = wordWidth;
+                }
             }
             else
             {
@@ -503,12 +578,24 @@ public class PixelFontSize
                 offset.X = 0;
             }
 
-            wrappedText.Append(word);
+            if (!appendWordPriorToNewLine)
+            {
+                wrappedText.Append(word);
+            }
 
-            cursor = nextSeparatorIndex + 1;
+            cursor += nextSeparatorIndex + 1;
         }
 
         return wrappedText.ToString();
+    }
+
+    private static bool IsPonctuation(char c)
+    {
+        return c switch
+        {
+            '!' or '！' or ':' or '?' or '？' or '、' or '.' or '。' or '…' => true,
+            _ => false,
+        };
     }
 }
 

@@ -20,6 +20,7 @@ using Murder.Messages;
 using Murder.Services;
 using Murder.Utilities;
 using System.Numerics;
+using Murder.Diagnostics;
 
 namespace Murder.Editor.Systems;
 
@@ -362,6 +363,7 @@ internal class SpriteRenderDebugSystem : IMurderRenderSystem, IGuiSystem
         if (issueSlowdownWarning)
         {
             // Do nothing! But we could issue an warning somewhere.
+            GameLogger.Warning("SpriteRenderDebugSystem: Slowdown detected! You might miss some animation events");
         }
     }
 
@@ -467,7 +469,7 @@ internal class SpriteRenderDebugSystem : IMurderRenderSystem, IGuiSystem
         AgentSpriteComponent sprite = e.GetAgentSprite();
         FacingComponent facing = e.GetFacing();
 
-        float start = NoiseHelper.Simple01(e.EntityId * 10) * 5f;
+        float start = NoiseHelper.Value1D(e.EntityId * 10) * 5f;
         var prefix = sprite.IdlePrefix;
 
         var angle = facing.Angle; // Gives us an angle from 0 to 1, with 0 being right and 0.5 being left
