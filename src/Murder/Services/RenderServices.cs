@@ -449,39 +449,20 @@ public static partial class RenderServices
     /// <param name="position">Where to position the points</param>
     /// <param name="points">The points to connect with lines</param>
     /// <param name="color">The color to use</param>
-    /// <param name="thickness">The thickness of the lines</param>
-    public static void DrawPoints(this Batch2D spriteBatch, Vector2 position, Vector2[] points, Color color, float thickness)
-    {
-        if (points.Length < 2)
-            return;
-
-        for (int i = 1; i < points.Length; i++)
-        {
-            DrawLine(spriteBatch, points[i - 1] + position, points[i] + position, color, thickness);
-        }
-        DrawLine(spriteBatch, points[points.Length - 1] + position, points[0] + position, color, thickness);
-    }
-
-    /// <summary>
-    /// Draws a list of connecting points
-    /// </summary>
-    /// <param name="spriteBatch">The destination drawing surface</param>
-    /// <param name="position">Where to position the points</param>
-    /// <param name="points">The points to connect with lines</param>
-    /// <param name="color">The color to use</param>
+    /// <param name="scale">The scale factor for the points</param>
     /// <param name="thickness">The thickness of the lines</param>
     /// <param name="sort">Sorting offset</param>
-    public static void DrawPoints(this Batch2D spriteBatch, Vector2 position, ImmutableArray<Vector2> points, Color color, float thickness, float sort)
+    public static void DrawPoints(this Batch2D spriteBatch, Vector2 position, Vector2 scale, ImmutableArray<Vector2> points, Color color, float thickness, float sort)
     {
         if (points.Length < 2)
             return;
 
         for (int i = 1; i < points.Length; i++)
         {
-            DrawLine(spriteBatch, (points[i - 1] + position).Round(), (points[i] + position).Round(), color, thickness, sort);
+            DrawLine(spriteBatch, (points[i - 1] * scale + position).Round(), (points[i] * scale + position).Round(), color, thickness, sort);
         }
 
-        DrawLine(spriteBatch, (points[points.Length - 1] + position).Round(), (points[0] + position).Round(), color, thickness, sort);
+        DrawLine(spriteBatch, (points[points.Length - 1] * scale + position).Round(), (points[0] * scale + position).Round(), color, thickness, sort);
     }
 
     /// <summary>
@@ -490,18 +471,19 @@ public static partial class RenderServices
     /// <param name="spriteBatch">The destination drawing surface</param>
     /// /// <param name="position">Where to position the points</param>
     /// <param name="points">The points to connect with lines</param>
+    /// <param name="scale">The scale factor for the points</param>
     /// <param name="color">The color to use</param>
     /// <param name="thickness">The thickness of the lines</param>
-    public static void DrawPoints(this Batch2D spriteBatch, Vector2 position, ReadOnlySpan<Vector2> points, Color color, float thickness)
+    public static void DrawPoints(this Batch2D spriteBatch, Vector2 position, Vector2 scale, ImmutableArray<Vector2> points, Color color, float thickness)
     {
         if (points.Length < 2)
             return;
 
         for (int i = 1; i < points.Length; i++)
         {
-            DrawLine(spriteBatch, points[i - 1] + position, points[i] + position, color, thickness);
+            DrawLine(spriteBatch, points[i - 1] * scale + position, points[i] * scale + position, color, thickness);
         }
-        DrawLine(spriteBatch, points[points.Length - 1] + position, points[0] + position, color, thickness);
+        DrawLine(spriteBatch, points[points.Length - 1] * scale + position, points[0] * scale + position, color, thickness);
     }
 
     public static void DrawRectangleOutline(this Batch2D spriteBatch, Rectangle rectangle, Color color) =>
@@ -520,7 +502,7 @@ public static partial class RenderServices
     public static float YSort(float y)
     {
         // TODO: Solve a better ySort that takes in consideration the camera position
-        return (Y_SORT_RANGE - y) / Y_SORT_RANGE_X2;
+        return (float)(Y_SORT_RANGE - y) / Y_SORT_RANGE_X2;
     }
 
     public static void DrawHorizontalLine(this Batch2D spriteBatch, int x, int y, int length, Color color, float sorting = 0)
@@ -693,16 +675,13 @@ public static partial class RenderServices
     /// <param name="sort">The sorting value</param>
     public static void DrawCircleOutline(this Batch2D spriteBatch, Vector2 center, float radius, int sides, Color color, float sort = 1f)
     {
-        DrawPoints(spriteBatch, center, GeometryServices.CreateCircle(radius, sides), color, sort);
+        DrawPoints(spriteBatch, center, Vector2.One * (radius * 2), GeometryServices.CreateOrGetCircle(1, sides), color, sort);
     }
 
     public static void DrawCircleOutline(this Batch2D spriteBatch, Rectangle rectangle, int sides, Color color)
     {
-        DrawPoints(spriteBatch, rectangle.TopLeft, GeometryServices.CreateOrGetCircle(rectangle.Size, sides), color, 1.0f);
+        DrawPoints(spriteBatch, rectangle.TopLeft, rectangle.Size, GeometryServices.CreateOrGetCircle(1, sides), color, 1.0f);
     }
-
-
-
 
     public static void DrawPoint(this Batch2D spriteBatch, Point pos, Color color, float sorting = 0)
     {
@@ -953,27 +932,34 @@ public static partial class RenderServices
         }
     }
 
-    public static void DrawPolygon(this Batch2D batch, ImmutableArray<Vector2> vertices, DrawInfo? drawInfo = default)
+    public static void DrawPolygon(this Batch2D batch, Vector2 position, ImmutableArray<Vector2> vertices, DrawInfo? drawInfo = default)
     {
-        batch.DrawPolygon(SharedResources.GetOrCreatePixel(), vertices, drawInfo ?? DrawInfo.Default);
+        batch.DrawPolygon(SharedResources.GetOrCreatePixel(), position, vertices, drawInfo ?? DrawInfo.Default);
     }
 
+    private readonly static ImmutableArray<Vector2>.Builder _cachedCircleVertices = ImmutableArray.CreateBuilder<Vector2>();
     public static void DrawFilledCircle(this Batch2D batch, Vector2 center, float radius, int steps, DrawInfo? drawInfo = default)
     {
-        Vector2[] circleVertices = GeometryServices.CreateOrGetFlattenedCircle(1f, 1f, steps);
+        ImmutableArray<Vector2> circleVertices = GeometryServices.CreateOrGetFlattenedCircle(1f, 1f, steps);
 
         // Scale and translate the vertices
-        var scaledTranslatedVertices = circleVertices.Select(p => new Vector2(p.X * radius + center.X, p.Y * radius + center.Y)).ToArray();
+        _cachedCircleVertices.Clear();
+        for (int i = 0; i < circleVertices.Length; ++i)
+        {
+            Vector2 p = circleVertices[i];
+            _cachedCircleVertices.Add(new Vector2(p.X * radius, p.Y * radius));
+        }
 
-        batch.DrawPolygon(SharedResources.GetOrCreatePixel(), scaledTranslatedVertices, drawInfo ?? DrawInfo.Default);
+        // perf: don't allocate this every call...
+        batch.DrawPolygon(SharedResources.GetOrCreatePixel(), center, _cachedCircleVertices.ToImmutable(), drawInfo ?? DrawInfo.Default);
     }
 
     public static void DrawFilledCircle(this Batch2D batch, Rectangle circleRect, int steps, DrawInfo drawInfo)
     {
-        Vector2[] circleVertices = GeometryServices.CreateOrGetFlattenedCircle(1f, 1f, steps);
+        ImmutableArray<Vector2> circleVertices = GeometryServices.CreateOrGetFlattenedCircle(1f, 1f, steps);
 
         // Scale and translate the vertices
-        batch.DrawPolygon(SharedResources.GetOrCreatePixel(), circleVertices, drawInfo.WithScale(circleRect.Size).WithOffset(circleRect.Center));
+        batch.DrawPolygon(SharedResources.GetOrCreatePixel(), circleRect.Center, circleVertices, drawInfo with { Scale = circleRect.Size });
     }
     public static void DrawPieChart(this Batch2D batch, Vector2 center, float radius, float startAngle, float endAngle, int steps, DrawInfo? drawInfo = default)
     {
@@ -983,12 +969,12 @@ public static partial class RenderServices
             _cachedPieChartVertices = new Vector2[steps + 3];
         }
 
-        Vector2[] circleVertices = GeometryServices.CreateOrGetFlattenedCircle(1f, 1f, steps);
+        ImmutableArray<Vector2> circleVertices = GeometryServices.CreateOrGetFlattenedCircle(1f, 1f, steps);
 
         // Scale and translate the vertices
         for (int i = 0; i <= steps; i++)
         {
-            _cachedPieChartVertices[i + 1] = new Vector2(circleVertices[i].X * radius + center.X, circleVertices[i].Y * radius + center.Y);
+            _cachedPieChartVertices[i + 1] = new Vector2(circleVertices[i].X * radius, circleVertices[i].Y * radius);
         }
 
         // Calculate the angle between each step
@@ -1006,7 +992,7 @@ public static partial class RenderServices
         _cachedPieChartVertices[startIndex] = center;
 
         // Draw the pie chart
-        batch.DrawPolygon(SharedResources.GetOrCreatePixel(), _cachedPieChartVertices[startIndex..(endIndex + 1)], drawInfo ?? DrawInfo.Default);
+        batch.DrawPolygon(SharedResources.GetOrCreatePixel(), center, _cachedPieChartVertices[startIndex..(endIndex + 1)].ToImmutableArray(), drawInfo ?? DrawInfo.Default);
     }
 
     public static Point DrawText(this Batch2D uiBatch, int font, string text, Vector2 position, DrawInfo? drawInfo = default)

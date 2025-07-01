@@ -31,7 +31,7 @@ namespace Murder.Systems.Effects
             // Were we actually listening to this particular event?
             ImmutableDictionary<string, SpriteEventInfo> events = entity.GetEventListener().Events;
 
-            bool alwaysPlay = entity.HasPlayEvenOffScreen() || entity.HasUi();
+            bool alwaysPlay = entity.HasPlayEvenOffScreen() || entity.HasUi() || entity.HasCutsceneAnchors();
             bool canPlay = alwaysPlay || entity.IsInCamera(world);
 
             if (canPlay && events.TryGetValue(animationEvent.Event, out SpriteEventInfo info))
@@ -109,6 +109,11 @@ namespace Murder.Systems.Effects
                 {
                     foreach ((string _, SpriteEventInfo info) in listener.Events)
                     {
+                        if (info.Sound is null)
+                        {
+                            continue;
+                        }
+
                         SoundServices.Stop(info.Sound, fadeOut: true, entityId: e.EntityId);
                     }
                 }

@@ -12,6 +12,7 @@ using Murder.Diagnostics;
 using Murder.Save;
 using System.Numerics;
 using Murder.Utilities;
+using System.Diagnostics;
 
 namespace Murder
 {
@@ -81,6 +82,7 @@ namespace Murder
 
         /// <summary>
         /// The time difference between current and last update, scaled by pause and other time scaling. Value is reliable only during the Update().
+        /// This value will be zero during render.
         /// </summary>
         public static float DeltaTime => (float)Instance._scaledDeltaTime;
         /// <summary>
@@ -115,7 +117,21 @@ namespace Murder
         /// <summary>
         /// Gets the fixed delta time in seconds.
         /// </summary>
-        public static float FixedDeltaTime => Instance._fixedUpdateDelta * Instance.TimeScale;
+        public static float FixedDeltaTime => Instance._fixedUpdateDelta;
+
+        public static bool IsRunningSlowly { get; private set; } = false;
+        /// <summary>
+        /// Total time in seconds that the game has been running since the last update.
+        /// Useful for calculating the total time of the game, including pauses and freezes.
+        /// </summary>
+        public float LastFrameDuration { get; private set; } = 0f;
+        private readonly Stopwatch _lastFrameStopwatch = new Stopwatch();
+
+        private readonly Stopwatch _updateStopwatch = new();
+        private readonly Stopwatch _renderStopWatch = new();
+        private readonly Stopwatch _imGuiStopWatch = new();
+        private readonly Stopwatch _soundStopWatch = new();
+
 
         /// <summary>
         /// Beautiful hardcoded grid so it's very easy to access in game!
@@ -125,7 +141,12 @@ namespace Murder
         /// <summary>
         /// Only updated if <see cref="DIAGNOSTICS_MODE"/> is set.
         /// </summary>
-        public static UpdateTimeTracker TimeTrackerDiagnoostics = new();
+        public static UpdateTimeTracker TimeTrackerDiagnostics = new();
+
+        /// <summary>
+        /// Only updated if <see cref="DIAGNOSTICS_MODE"/> is set.
+        /// </summary>
+        public static UpdateTimeTracker RenderTimeTrackerDiagnostics = new();
 
         /* *** Protected helpers *** */
 
@@ -155,20 +176,34 @@ namespace Murder
 
         public const float LONGEST_TIME_RESET = 5f;
 
+        /// <summary>
+        /// Time in seconds that the Update() methods took to finish.
+        /// This is not the time between updates (that's <see cref="DeltaTime"/>), instead it's the time
+        /// That the systems take to actually update the game logic, including all the systems and components and render systems.
+        /// </summary>
         public float UpdateTime { get; private set; }
         public float LongestUpdateTime { get; private set; }
         private float _longestUpdateTimeAt;
 
         /// <summary>
-        /// Time in seconds that the Draw() method took to finish
+        /// Time in seconds that the Draw() method took to finish.
+        /// This is not the time that the render systems take, instead it's the time
+        /// that the game takes to actually render the scene, including all the draw calls.
         /// </summary>
         public float RenderTime { get; private set; }
-        
+
+        /// <summary>
+        /// Time in seconds that the ImGui rendering took to finish.
+        /// </summary>
+        public float ImGuiRenderTime { get; private set; }
+        public float SoundUpdateTime { get; private set; }
+
+
         /// <summary>
         /// Gets the longest render time ever recorded.
         /// </summary>
         public float LongestRenderTime { get; private set; }
-        
+
         private float _longestRenderTimeAt;
 
         /// <summary>
@@ -278,13 +313,8 @@ namespace Murder
         private double _scaledPreviousElapsedTime = 0;
         private double _unscaledPreviousElapsedTime = 0;
 
-        private double _lastRenderTime = 0;
-        private double _timeSinceLastDraw = 0;
-
         private double _scaledDeltaTime = 0;
         private double _unscaledDeltaTime = 0;
-
-        private double _previousFrameTime = 0;
 
         /// <summary>
         /// This is the underlying implementation of the game. This listens to the murder game events.
@@ -326,14 +356,14 @@ namespace Murder
             Instance = this;
 
             Window.AllowUserResizing = true;
-            
+
             Window.ClientSizeChanged += (s, e) =>
             {
                 if (s is not Microsoft.Xna.Framework.GameWindow window)
                 {
                     throw new Exception("Window is not a GameWindow");
                 }
-                ActiveScene?.RefreshWindow(new (window.ClientBounds.Width, window.ClientBounds.Height), GraphicsDevice, Profile);
+                ActiveScene?.RefreshWindow(new(window.ClientBounds.Width, window.ClientBounds.Height), GraphicsDevice, Profile);
             };
 
             Content.RootDirectory = "Content";
@@ -373,6 +403,7 @@ namespace Murder
             // Editor input
             _playerInput.RegisterButton(MurderInputButtons.Debug, Keys.F1);
             _playerInput.RegisterButton(MurderInputButtons.PlayGame, Keys.F5);
+
             _playerInput.Register(MurderInputButtons.LeftClick, MouseButtons.Left);
             _playerInput.Register(MurderInputButtons.RightClick, MouseButtons.Right);
             _playerInput.Register(MurderInputButtons.MiddleClick, MouseButtons.Middle);
@@ -382,20 +413,11 @@ namespace Murder
             _playerInput.RegisterButton(MurderInputButtons.Delete, Keys.Delete);
             _playerInput.RegisterButton(MurderInputButtons.Ctrl, Keys.LeftControl, Keys.RightControl);
             _playerInput.RegisterButton(MurderInputButtons.Space, Keys.Space);
+            _playerInput.RegisterButton(MurderInputButtons.Backspace, Keys.Back, Keys.BrowserBack);
 
             // Navigation input
-            _playerInput.RegisterButton(MurderInputButtons.Submit, Keys.Space, Keys.Enter);
-            _playerInput.RegisterButton(MurderInputButtons.Submit, Buttons.A, Buttons.Y);
-
-            _playerInput.RegisterButton(MurderInputButtons.Cancel, Buttons.B, Buttons.Back, Buttons.Start);
-
-            _playerInput.RegisterButton(MurderInputButtons.Pause, Keys.Escape, Keys.P);
-            _playerInput.RegisterButton(MurderInputButtons.Pause, Buttons.Start);
-
-            _playerInput.RegisterAxes(MurderInputAxis.Ui, GamepadAxis.LeftThumb, GamepadAxis.RightThumb, GamepadAxis.Dpad);
-            _playerInput.Register(MurderInputAxis.Ui,
-                new InputButtonAxis(Keys.W, Keys.A, Keys.S, Keys.D),
-                new InputButtonAxis(Keys.Up, Keys.Left, Keys.Down, Keys.Right));
+            _playerInput.RegisterAxes(MurderInputAxis.Ui, 
+                GamepadAxis.LeftThumb, GamepadAxis.RightThumb, GamepadAxis.Dpad);
 
             base.Initialize(); // Content is loaded here
 
@@ -416,7 +438,7 @@ namespace Murder
         /// </remarks>
         public virtual void RefreshWindow()
         {
-            SetTargetFps(Profile.TargetFps, Profile.FixedUpdateFactor);
+            SetTargetFps(Profile.TargetFps);
 
             _screenSize = new Point(Width, Height) * Data.GameProfile.GameScale;
 
@@ -450,12 +472,13 @@ namespace Murder
         /// </remarks>
         public virtual void SetWindowSize(Point screenSize, bool remember)
         {
-            _graphics.SynchronizeWithVerticalRetrace = true;
+            // _graphics.SynchronizeWithVerticalRetrace = true;
+
             if (Fullscreen)
             {
                 _windowedSize = _graphics.GraphicsDevice.Viewport.Bounds.Size();
 
-                Window.IsBorderlessEXT = true;  
+                Window.IsBorderlessEXT = true;
                 _graphics.IsFullScreen = true;
 
                 _graphics.PreferredBackBufferWidth = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
@@ -508,7 +531,7 @@ namespace Murder
         /// Virtual method for extended content loading implementation in derived classes.
         /// </summary>
         protected virtual void LoadContentImpl() { }
-        
+
         /// /// <summary>
         /// Applies game settings based on the current <see cref="GameProfile"/>, loaded with <see cref="_gameData"/>. Configures grid and rendering settings, and calls an implementation-specific settings application method.
         /// </summary>
@@ -591,7 +614,7 @@ namespace Murder
 
             return wasSkipping;
         }
-        
+
         /// <summary>
         /// Sets the flag to indicate that the game should wait for the save operation to complete.
         /// </summary>
@@ -617,12 +640,15 @@ namespace Murder
         {
             IsPaused = false;
         }
-        
+
         /// <summary>
         /// Performs game frame updates, handling logic for paused states, fixed updates, and unscaled time.
         /// </summary>
         protected override void Update(Microsoft.Xna.Framework.GameTime gameTime)
         {
+            LastFrameDuration = Math.Clamp((float)_lastFrameStopwatch.Elapsed.TotalSeconds,0, FixedDeltaTime * 2);
+            _lastFrameStopwatch.Restart();
+
             if (_waitForSaveComplete && !CanResumeAfterSaveComplete())
             {
                 UpdateUnscaledDeltaTime(gameTime.ElapsedGameTime.TotalSeconds);
@@ -638,8 +664,12 @@ namespace Murder
                 _initialiazedAfterContentLoaded = true;
             }
 
+            if (DIAGNOSTICS_MODE)
+            {
+                _updateStopwatch.Start();
+            }
             UpdateImpl(gameTime);
-            
+
             // Absolute time is ALWAYS updated.
             _absoluteElapsedTime += gameTime.ElapsedGameTime.TotalSeconds;
 
@@ -650,18 +680,31 @@ namespace Murder
                 ActiveScene?.OnBeforeDraw();
             }
 
+            if (DIAGNOSTICS_MODE)
+            {
+                _soundStopWatch.Start();
+            }
             // Update sound logic!
             SoundPlayer.Update();
+
+            if (DIAGNOSTICS_MODE)
+            {
+                SoundUpdateTime = (float)(_soundStopWatch.Elapsed.TotalSeconds);
+                _soundStopWatch.Stop();
+                _soundStopWatch.Reset();
+            }
 
             // Update haptics
             Haptics.Update();
         }
-        
+
         /// <summary>
         /// Implements core update logic, including frame freezing, world transitions, input handling, and time scaling.
         /// </summary>
         protected void UpdateImpl(Microsoft.Xna.Framework.GameTime gameTime)
         {
+            IsRunningSlowly = gameTime.IsRunningSlowly;
+
             // If this is set, the game has been frozen for some frames.
             // We will simply wait until this returns properly.
             if (_freezeFrameCount > 0)
@@ -680,20 +723,17 @@ namespace Murder
             DoPendingWorldTransition();
 
             GameLogger.Verify(ActiveScene is not null);
-            
-            var startTime = gameTime.TotalGameTime.TotalSeconds;
-            var calculatedDelta = startTime - _previousFrameTime;
 
-            _previousFrameTime = startTime;
+            var calculatedDelta = LastFrameDuration;
+
 
             double deltaTime;
             if (_isSkippingDeltaTimeOnUpdate)
             {
-                deltaTime = TargetElapsedTime.TotalSeconds;
+                deltaTime = LastFrameDuration;
             }
             else
             {
-                TimeTrackerDiagnoostics.Update(calculatedDelta);
                 deltaTime = Math.Clamp(calculatedDelta, 0, FixedDeltaTime * 2);
             }
 
@@ -721,7 +761,7 @@ namespace Murder
             int maxRecoverFrames = 3;
             while (_unscaledElapsedTime >= _targetFixedUpdateTime)
             {
-                ActiveScene.FixedUpdate();
+                ActiveScene.FixedUpdate(); // <==== Update all FixedUpdate systems
 
                 // Update previous time after fixed update
                 _unscaledPreviousElapsedTime = _unscaledElapsedTime;
@@ -739,29 +779,15 @@ namespace Murder
                     // Since we are running update again we must reset delta time to zero (no time passed since that update)
                     _scaledDeltaTime = 0;
                     _unscaledDeltaTime = 0;
-                    UpdateInputAndScene();
+                    UpdateInputAndScene(); // <==== Update all Update systems (and input
                 }
             }
 
             base.Update(gameTime); // Monogame/XNA internal Update
 
-            UpdateTime = (float)(gameTime.TotalGameTime.TotalSeconds - startTime);
-
-            if (Now > _longestUpdateTimeAt + LONGEST_TIME_RESET)
-            {
-                _longestUpdateTimeAt = Now;
-                LongestUpdateTime = 0.0f;
-            }
-
-            if (UpdateTime > LongestUpdateTime)
-            {
-                _longestUpdateTimeAt = Now;
-                LongestUpdateTime = UpdateTime;
-            }
-
             _game?.OnUpdate();
         }
-        
+
         /// <summary>
         /// Updates player input and the active scene.
         /// </summary>
@@ -780,33 +806,70 @@ namespace Murder
         {
             GameLogger.Verify(ActiveScene is not null);
 
-            var startTime = DateTime.Now;
-
             if (!ActiveScene.Loaded && ActiveScene.RenderContext is RenderContext renderContext)
             {
                 OnLoadingDraw(renderContext);
             }
 
-            ActiveScene.Draw();
+            bool drawStarted = ActiveScene.DrawStart(); // <==== Start RenderContext draw call
 
-            base.Draw(gameTime);
-            DrawImGui(gameTime);
-
-            _timeSinceLastDraw = gameTime.TotalGameTime.TotalSeconds - _lastRenderTime;
-            _lastRenderTime = gameTime.TotalGameTime.TotalSeconds;
-
-            RenderTime = (float)_timeSinceLastDraw / 1000f;
-
-            if (Now > _longestRenderTimeAt + LONGEST_TIME_RESET)
+            if (DIAGNOSTICS_MODE)
             {
-                _longestRenderTimeAt = Now;
-                LongestRenderTime = 0.0f;
+                UpdateTime = (float)(_updateStopwatch.Elapsed.TotalSeconds);
+                _updateStopwatch.Stop();
+                _updateStopwatch.Reset();
+                TimeTrackerDiagnostics.Update(UpdateTime);
+
+                if (Now > _longestUpdateTimeAt + LONGEST_TIME_RESET)
+                {
+                    _longestUpdateTimeAt = Now;
+                    LongestUpdateTime = 0.0f;
+                }
+
+                if (UpdateTime > LongestUpdateTime)
+                {
+                    _longestUpdateTimeAt = Now;
+                    LongestUpdateTime = UpdateTime;
+                }
+
+                _renderStopWatch.Start();
             }
 
-            if (RenderTime > LongestRenderTime)
+            if (drawStarted)
             {
-                _longestRenderTimeAt = Now;
-                LongestRenderTime = UpdateTime;
+                ActiveScene.DrawEnd(); // <==== End RenderContext draw call
+            }
+            base.Draw(gameTime); // Monogame/XNA internal Draw
+
+            if (DIAGNOSTICS_MODE)
+            {
+                RenderTime = (float)(_renderStopWatch.Elapsed.TotalSeconds);
+                _renderStopWatch.Stop();
+                _renderStopWatch.Reset();
+                RenderTimeTrackerDiagnostics.Update(RenderTime);
+
+                _imGuiStopWatch.Start();
+            }
+
+            DrawImGui(gameTime); // <== Draw ImGui content
+
+            if (DIAGNOSTICS_MODE)
+            {
+                ImGuiRenderTime = (float)(_imGuiStopWatch.Elapsed.TotalSeconds);
+                _imGuiStopWatch.Stop();
+                _imGuiStopWatch.Reset();
+
+                if (Now > _longestRenderTimeAt + LONGEST_TIME_RESET)
+                {
+                    _longestRenderTimeAt = Now;
+                    LongestRenderTime = 0.0f;
+                }
+
+                if (RenderTime > LongestRenderTime)
+                {
+                    _longestRenderTimeAt = Now;
+                    LongestRenderTime = UpdateTime;
+                }
             }
 
             _game?.OnDraw();
@@ -870,9 +933,9 @@ namespace Murder
             _scaledDeltaTime = deltaTime;
         }
 
-        private void SetTargetFps(int fps, float fixedUpdateFactor)
+        private void SetTargetFps(int fps)
         {
-            _fixedUpdateDelta = 1f / (fps / fixedUpdateFactor);
+            _fixedUpdateDelta = 1f / fps;
         }
 
         /// <summary>

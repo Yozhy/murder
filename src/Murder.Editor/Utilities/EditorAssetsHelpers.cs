@@ -159,6 +159,10 @@ public static class EditorAssetHelpers
                 {
                     return false;
                 }
+                if (aseprite.Frames.Length == 0)
+                {
+                    return false;
+                }
 
                 string frameId = string.IsNullOrEmpty(animationId) ? aseprite.Frames[0].Name : aseprite.Animations.ContainsKey(animationId) ?
                     aseprite.Frames[aseprite.Animations[animationId].Frames[0]].Name : aseprite.Frames[0].Name;
@@ -393,7 +397,6 @@ public static class EditorAssetHelpers
         tile.DrawTile(batch, size.X, size.Y, 2, 2, 1, Color.White, RenderServices.BLEND_NORMAL);
 
         batch.End();
-        batch.Dispose();
 
         Game.GraphicsDevice.SetRenderTarget(null);
         return target;

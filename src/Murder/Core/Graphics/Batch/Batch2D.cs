@@ -5,27 +5,30 @@ using Microsoft.Xna.Framework.Graphics;
 using Murder.Diagnostics;
 using Murder.Services;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using XnaColor = Microsoft.Xna.Framework.Color;
 
 namespace Murder.Core.Graphics;
-public class Batch2D : IDisposable
+public class Batch2D
 {
     public string Name;
 
     public const int StartBatchItemsCount = 128;
     public int TotalItemCount => _batchItems.Length;
+    private int _lastQueue = 0;
+    public int ItemsQueued => _lastQueue;
     public int TotalTransparentItemCount => _transparencyBatchItems?.Length ?? 0;
 
     private VertexInfo[] _vertices = new VertexInfo[StartBatchItemsCount * 4];
     private int[] _indices = new int[StartBatchItemsCount * 4];
 
     private VertexInfo[] _vertexBuffer = new VertexInfo[StartBatchItemsCount * 4];
-    private short[] _indexBuffer = new short[StartBatchItemsCount * 6];
+    private int[] _indexBuffer = new int[StartBatchItemsCount * 6];
 
     private SpriteBatchItem[] _batchItems = new SpriteBatchItem[StartBatchItemsCount];
     private SpriteBatchItem[]? _transparencyBatchItems;
 
-    private int _nextItemIndex, _nextItemWithTransparencyIndex;
+    private int _nextItemIndex;
 
     public GraphicsDevice GraphicsDevice { get; set; }
     public readonly BatchMode BatchMode;
@@ -40,8 +43,7 @@ public class Batch2D : IDisposable
         BatchMode batchMode,
         SamplerState samplerState,
         DepthStencilState? depthStencilState = null,
-        RasterizerState? rasterizerState = null,
-        bool autoHandleAlphaBlendedSprites = false)
+        RasterizerState? rasterizerState = null)
         : this(
               name,
               graphicsDevice,
@@ -50,8 +52,7 @@ public class Batch2D : IDisposable
               batchMode,
               samplerState,
               depthStencilState,
-              rasterizerState,
-              autoHandleAlphaBlendedSprites)
+              rasterizerState)
     { }
 
     public Batch2D(string name,
@@ -61,8 +62,7 @@ public class Batch2D : IDisposable
         BatchMode batchMode,
         SamplerState samplerState,
         DepthStencilState? depthStencilState = null,
-        RasterizerState? rasterizerState = null,
-        bool autoHandleAlphaBlendedSprites = false)
+        RasterizerState? rasterizerState = null)
     {
         Name = name;
 
@@ -74,19 +74,10 @@ public class Batch2D : IDisposable
         RasterizerState = rasterizerState ?? RasterizerState.CullNone;
         _followCamera = followCamera;
 
-        AutoHandleAlphaBlendedSprites = autoHandleAlphaBlendedSprites;
-
-        if (AutoHandleAlphaBlendedSprites)
-        {
-            _transparencyBatchItems = new SpriteBatchItem[_batchItems.Length / 2];
-            InitializeTransparencyItemsBuffers();
-        }
-
         Initialize();
     }
 
 #if DEBUG
-
     /// <summary>
     /// Track number of draw calls.
     /// </summary>
@@ -102,15 +93,7 @@ public class Batch2D : IDisposable
     public bool IsBatching { get; private set; }
     public Effect? Effect { get; set; } = null;
 
-    /// <summary>
-    /// Auto handle any non-opaque (i.e. with some transparency; Opacity &lt; 1.0f) sprite rendering.
-    /// By drawing first all opaque sprites, with depth write enabled, followed by non-opaque sprites, with only depth read enabled.
-    /// </summary>
-    public bool AutoHandleAlphaBlendedSprites { get; private set; }
-    public bool AllowIBasicShaderEffectParameterClone { get; set; } = true;
-
     public Matrix Transform { get; private set; }
-    public bool IsDisposed { get; private set; }
 
     private readonly bool _followCamera;
 
@@ -125,7 +108,7 @@ public class Batch2D : IDisposable
     /// </summary>
     public void GiveUp()
     {
-        _nextItemWithTransparencyIndex = 0;
+        _lastQueue = _nextItemIndex;
         _nextItemIndex = 0;
     }
 
@@ -180,7 +163,7 @@ public class Batch2D : IDisposable
         }
 #endif
 
-        ref SpriteBatchItem batchItem = ref GetBatchItem(AutoHandleAlphaBlendedSprites && color.A < byte.MaxValue);
+        ref SpriteBatchItem batchItem = ref GetBatchItem();
         batchItem.Set(texture, position, targetSize, sourceRectangle, rotation, scale, flip, color, offset, blendStyle, blendState, sort);
 
         if (BatchMode == BatchMode.Immediate)
@@ -198,47 +181,20 @@ public class Batch2D : IDisposable
         Transform = Matrix.CreateScale(scale.X, scale.Y, 1) * Matrix.CreateTranslation(position.X, position.Y, 0f);
     }
 
-    public void DrawPolygon(Texture2D texture, System.Numerics.Vector2[] vertices, DrawInfo drawInfo)
+    public void DrawPolygon(Texture2D texture, System.Numerics.Vector2 position, ImmutableArray<System.Numerics.Vector2> vertices, DrawInfo drawInfo)
     {
         if (!IsBatching)
         {
             throw new InvalidOperationException("Begin() must be called before any Draw() operation.");
         }
 
-        ref SpriteBatchItem batchItem = ref GetBatchItem(AutoHandleAlphaBlendedSprites && drawInfo.Color.A < byte.MaxValue);
-        batchItem.SetPolygon(texture, vertices, drawInfo);
+        ref SpriteBatchItem batchItem = ref GetBatchItem();
+
+        batchItem.SetPolygon(texture, position, vertices, drawInfo);
 
         if (BatchMode == BatchMode.Immediate)
         {
             Flush();
-        }
-    }
-
-    public void DrawPolygon(Texture2D texture, ImmutableArray<System.Numerics.Vector2> vertices, DrawInfo drawInfo)
-    {
-        if (!IsBatching)
-        {
-            throw new InvalidOperationException("Begin() must be called before any Draw() operation.");
-        }
-
-        ref SpriteBatchItem batchItem = ref GetBatchItem(AutoHandleAlphaBlendedSprites && drawInfo.Color.A < byte.MaxValue);
-
-        batchItem.SetPolygon(texture, vertices.AsSpan(), drawInfo);
-
-        if (BatchMode == BatchMode.Immediate)
-        {
-            Flush();
-        }
-    }
-
-    /// <summary>
-    /// Immediately releases the unmanaged resources used by this object.
-    /// </summary>
-    public void Dispose()
-    {
-        if (!IsDisposed)
-        {
-            IsDisposed = true;
         }
     }
 
@@ -256,46 +212,16 @@ public class Batch2D : IDisposable
 
         Render(ref _batchItems, _nextItemIndex, DepthStencilState);
 
-        if (AutoHandleAlphaBlendedSprites && includeAlphaBlendedSprites)
-        {
-            GameLogger.Verify(_transparencyBatchItems is not null);
-
-            Render(ref _transparencyBatchItems, _nextItemWithTransparencyIndex, DepthStencilState.DepthRead);
-
 #if DEBUG
-
-            SpriteCount += _nextItemWithTransparencyIndex;
-
-#endif
-
-            _nextItemWithTransparencyIndex = 0;
-        }
-
-#if DEBUG
-
         SpriteCount += _nextItemIndex;
+        _lastQueue = _nextItemIndex;
 #endif
 
         _nextItemIndex = 0;
     }
 
-    private ref SpriteBatchItem GetBatchItem(bool needsTransparency)
+    private ref SpriteBatchItem GetBatchItem()
     {
-        if (needsTransparency)
-        {
-            GameLogger.Verify(_transparencyBatchItems is not null);
-
-            if (_nextItemWithTransparencyIndex >= _transparencyBatchItems.Length)
-            {
-                SetTransparencyBuffersCapacity(_transparencyBatchItems.Length + _transparencyBatchItems.Length / 2);
-            }
-
-            ref SpriteBatchItem transparencyBatchItem = ref _transparencyBatchItems[_nextItemWithTransparencyIndex];
-            _nextItemWithTransparencyIndex++;
-
-            return ref transparencyBatchItem;
-        }
-
         if (_nextItemIndex >= _batchItems.Length)
         {
             SetBuffersCapacity(_batchItems.Length * 2);
@@ -343,13 +269,13 @@ public class Batch2D : IDisposable
         {
             _batchItems[i] = new SpriteBatchItem();
 
-            _indexBuffer[i * 6] = (short)(i * 4 + 3);
-            _indexBuffer[i * 6 + 1] = (short)(i * 4);
-            _indexBuffer[i * 6 + 2] = (short)(i * 4 + 2);
+            _indexBuffer[i * 6] = (i * 4 + 3);
+            _indexBuffer[i * 6 + 1] = (i * 4);
+            _indexBuffer[i * 6 + 2] = (i * 4 + 2);
 
-            _indexBuffer[i * 6 + 3] = (short)(i * 4 + 2);
-            _indexBuffer[i * 6 + 4] = (short)(i * 4);
-            _indexBuffer[i * 6 + 5] = (short)(i * 4 + 1);
+            _indexBuffer[i * 6 + 3] = (i * 4 + 2);
+            _indexBuffer[i * 6 + 4] = (i * 4);
+            _indexBuffer[i * 6 + 5] = (i * 4 + 1);
         }
     }
 
@@ -413,10 +339,18 @@ public class Batch2D : IDisposable
         int indicesIndex = 0;
 
         Effect?.Parameters["MatrixTransform"]?.SetValue(matrix);
-        
+
         for (int i = 0; i < itemsCount; i++)
         {
             batchItem = batchItems[i];
+
+#if DEBUG
+            if (texture == null)
+            {
+                GameLogger.Error($"Batch2D '{Name}' has a null texture at index {i}. This is likely a bug.");
+                Debugger.Break();
+            }
+#endif
 
             // If the texture is different, we need to flush the current batch and start a new one
             if (batchItem.Texture != null && batchItem.Texture != texture)
@@ -507,8 +441,8 @@ public class Batch2D : IDisposable
         {
             foreach (EffectPass pass in Effect.CurrentTechnique.Passes)
             {
-                pass.Apply();
                 GraphicsDevice.Textures[0] = texture;
+                pass.Apply();
 
                 // This is where we finally draw the vertices too the screen
                 GraphicsDevice.DrawUserIndexedPrimitives(

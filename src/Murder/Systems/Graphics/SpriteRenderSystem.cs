@@ -2,7 +2,6 @@
 using Bang.Contexts;
 using Bang.Entities;
 using Bang.Systems;
-using Microsoft.Xna.Framework.Graphics;
 using Murder.Assets.Graphics;
 using Murder.Components;
 using Murder.Components.Graphics;
@@ -10,7 +9,6 @@ using Murder.Core;
 using Murder.Core.Geometry;
 using Murder.Core.Graphics;
 using Murder.Diagnostics;
-using Murder.Helpers;
 using Murder.Services;
 using Murder.Utilities;
 using System.Numerics;
@@ -19,35 +17,30 @@ namespace Murder.Systems.Graphics
 {
     [Filter(ContextAccessorFilter.AllOf, typeof(SpriteComponent), typeof(ITransformComponent), typeof(InCameraComponent))]
     [Filter(ContextAccessorFilter.NoneOf, typeof(InvisibleComponent), typeof(ThreeSliceComponent))]
-    public class SpriteRenderSystem : IStartupSystem, IExitSystem, IMurderRenderSystem
+    public class SpriteRenderSystem : IMurderRenderSystem
     {
-        private readonly Dictionary<Guid, SpriteAsset> _spriteAssetCache = [];
-        
         public void Draw(RenderContext render, Context context)
         {
+            DebugSnapshot.StartStopwatch("Sprite Render System");
             bool issueSlowdownWarning = false;
 
             foreach (Entity e in context.Entities)
             {
+                IMurderTransformComponent transform = e.GetGlobalTransform();
+                SpriteComponent s = e.GetSprite();
+
+                if (Game.Data.TryGetAsset<SpriteAsset>(s.AnimationGuid) is not SpriteAsset asset)
+                {
+                    GameLogger.Error($"Sprite GUID not found {s.AnimationGuid}");
+                    continue;
+                }
+
                 ImageFlip flip = ImageFlip.None;
 
                 if (e.TryGetFlipSprite() is FlipSpriteComponent flipSprite)
                 {
                     flip = flipSprite.Orientation;
                 }
-
-                IMurderTransformComponent transform = e.GetGlobalTransform();
-                SpriteComponent s = e.GetSprite();
-
-                if (!_spriteAssetCache.TryGetValue(s.AnimationGuid, out SpriteAsset? asset))
-                {
-                    if (Game.Data.TryGetAsset<SpriteAsset>(s.AnimationGuid) is not SpriteAsset loadedAsset)
-                        continue;
-
-                    _spriteAssetCache[s.AnimationGuid] = loadedAsset;
-                    asset = loadedAsset;
-                }
-
 
                 Vector2 renderPosition;
                 if (e.TryGetParallax() is ParallaxComponent parallax)
@@ -97,11 +90,9 @@ namespace Murder.Systems.Graphics
                     blendState = Core.Graphics.MurderBlendState.AlphaBlend;
                 }
 
-                float ySortOffsetRaw = transform.Y + s.YSortOffset;
+                float ySortOffsetRaw = 0;
 
                 string animation = s.CurrentAnimation;
-
-
                 float startTime = e.TryGetAnimationStarted()?.StartTime ?? (s.UseUnscaledTime ? Game.Now : Game.NowUnscaled);
 
                 AnimationOverloadComponent? overload = null;
@@ -121,6 +112,16 @@ namespace Murder.Systems.Graphics
                     ySortOffsetRaw += o.SortOffset;
                 }
 
+                float yPositionForYSort = transform.Y;
+
+                int? forceFrame = null;
+                if (e.TryGetSpriteFrame() is SpriteFrameComponent spriteFrame && spriteFrame.Animation.Equals(animation))
+                {
+                    forceFrame = spriteFrame.Frame;
+                    yPositionForYSort = spriteFrame.Y;
+                }
+
+                ySortOffsetRaw += yPositionForYSort + s.YSortOffset;
                 float ySort = e.HasUiDisplay() ? e.GetUiDisplay().YSort : RenderServices.YSort(ySortOffsetRaw + 0.01f * (e.EntityId % 20));
 
                 VerticalPositionComponent? verticalPosition = e.TryGetVerticalPosition();
@@ -139,7 +140,7 @@ namespace Murder.Systems.Graphics
                         !e.HasDoNotLoop() &&                       // if this has the DoNotLoop component, don't loop
                         !e.HasDestroyOnAnimationComplete() &&     // if you want to destroy this, don't loop
                         (overload == null || (overload.Value.AnimationCount == 1 && overload.Value.Loop)),
-                    ForceFrame = e.TryGetSpriteFrame()?.Frame
+                    ForceFrame = forceFrame
                 };
 
                 var scale = e.TryGetScale()?.Scale ?? Vector2.One;
@@ -155,8 +156,8 @@ namespace Murder.Systems.Graphics
                 {
                     renderPosition += offset.Offset;
                 }
-                Color? outlineColor = e.HasDeactivateHighlightSprite() ? null :
-                    e.TryGetHighlightSprite()?.Color;
+
+                Color? outlineColor = e.HasDeactivateHighlightSprite() ? null : e.TryGetHighlightSprite()?.Color;
 
                 FrameInfo frameInfo;
                 if (animationInfo.ForceFrame.HasValue)
@@ -218,7 +219,10 @@ namespace Murder.Systems.Graphics
                 });
 
                 if (frameInfo.Failed)
+                {
+                    GameLogger.Error($"Sprite render failed!");
                     continue;
+                }
 
                 // Animations do not send complete messages until the current sequence is done
                 if (frameInfo.Complete)
@@ -248,6 +252,8 @@ namespace Murder.Systems.Graphics
             {
                 GameLogger.Warning("Animation event loop reached. Breaking out of loop. This was probably caused by a major slowdown.");
             }
+
+            DebugSnapshot.PauseStopwatch();
         }
 
         private float GetInheritedAlpha(Entity entity)
@@ -259,25 +265,6 @@ namespace Murder.Systems.Graphics
             }
 
             return alpha * (entity.TryGetAlpha()?.Alpha ?? 1.0f);
-        }
-
-        public void ClearCache()
-        {
-            _spriteAssetCache.Clear();
-        }
-
-        public void Start(Context context)
-        {
-#if DEBUG
-            Game.Data.TrackOnHotReloadSprite(ClearCache);
-#endif
-        }
-
-        public void Exit(Context context)
-        {
-#if DEBUG
-            Game.Data.UntrackOnHotReloadSprite(ClearCache);
-#endif
         }
     }
 }

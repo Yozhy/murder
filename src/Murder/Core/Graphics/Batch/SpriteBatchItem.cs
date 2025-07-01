@@ -3,6 +3,7 @@
 using Microsoft.Xna.Framework.Graphics;
 using Murder.Core.Geometry;
 using Murder.Utilities;
+using System.Collections.Immutable;
 using Vector2 = Microsoft.Xna.Framework.Vector2;
 using Vector3 = Microsoft.Xna.Framework.Vector3;
 
@@ -12,8 +13,8 @@ public class SpriteBatchItem
 {
     public Texture2D? Texture;
     public VertexInfo[] VertexData = new VertexInfo[4];
-    public int[] IndexData = new int[6];
-    public int VertexCount = 4;
+    public short[] IndexData = new short[6];
+    public short VertexCount = 4;
     public MurderBlendState BlendState;
     public SpriteBatchItem() { }
 
@@ -118,18 +119,22 @@ public class SpriteBatchItem
             VertexData[0].TextureCoordinate = texCoord;
         }
     }
-    public void SetPolygon(Texture2D texture, ReadOnlySpan<System.Numerics.Vector2> vertices, DrawInfo drawInfo)
+    public void SetPolygon(Texture2D texture, System.Numerics.Vector2 position, ImmutableArray<System.Numerics.Vector2> vertices, DrawInfo drawInfo)
     {
         Texture = texture;
-        VertexCount = vertices.Length;
+        VertexCount = (short)vertices.Length;
         int triangleCount = VertexCount - 2;
 
         // Make sure we have space
         if (VertexData.Length < VertexCount)
+        {
             VertexData = new VertexInfo[VertexCount];
+        }
 
         if (IndexData.Length < triangleCount * 3)
-            IndexData = new int[triangleCount * 3];
+        {
+            IndexData = new short[triangleCount * 3];
+        }
 
         // Calculate the transformed origin
         System.Numerics.Vector2 origin = new(drawInfo.Origin.X * drawInfo.Scale.X, drawInfo.Origin.Y * drawInfo.Scale.Y);
@@ -138,7 +143,7 @@ public class SpriteBatchItem
         for (int i = 0; i < VertexCount; i++)
         {
             // Apply scale and subtract the origin
-            Vector2 transformedVertex = ((vertices[i] * drawInfo.Scale) - origin).ToXnaVector2();
+            Vector2 transformedVertex = ((vertices[i] * drawInfo.Scale) - origin + position).ToXnaVector2();
 
             // Apply rotation if necessary
             if (drawInfo.Rotation != 0)
@@ -171,13 +176,12 @@ public class SpriteBatchItem
                 drawInfo.GetBlendMode()
             );
         }
-
         // Set index data
-        for (int i = 0; i < triangleCount; i++)
+        for (short i = 0; i < triangleCount; i++)
         {
             IndexData[i * 3] = 0;
-            IndexData[i * 3 + 1] = i + 1;
-            IndexData[i * 3 + 2] = i + 2;
+            IndexData[i * 3 + 1] = (short)(i + 1);
+            IndexData[i * 3 + 2] = (short)(i + 2);
         }
     }
 

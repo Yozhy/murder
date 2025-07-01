@@ -3,6 +3,7 @@ using Murder.Core.Graphics;
 using Murder.Core.Input;
 using Murder.Services;
 using Murder.Utilities;
+using System.Collections.Immutable;
 using System.Numerics;
 
 namespace Murder.Editor.Services
@@ -282,20 +283,19 @@ namespace Murder.Editor.Services
             return false;
         }
 
-        public static bool PolyHandle(string id, RenderContext render, Vector2 basePosition, Vector2 cursorPosition, Polygon polygon, Color outline, Color color, out Polygon newPolygon, out bool isShapeHovered)
+        public static bool PolyHandle(string id, RenderContext render, Vector2 basePosition, Vector2 scale, Vector2 cursorPosition, Polygon polygon, Color outline, Color color, out Polygon newPolygon, out bool isShapeHovered)
         {
             isShapeHovered = false;
             newPolygon = polygon;
             cursorPosition -= basePosition;
-            var polygonWorld = polygon.AddPosition(basePosition.Point());
             if (!polygon.IsConvex())
             {
                 if (Calculator.Blink(10, false))
-                    RenderServices.DrawPolygon(render.DebugFxBatch, polygonWorld.Vertices, new DrawInfo(color * 0.45f, 0.8f));
+                    RenderServices.DrawPolygon(render.DebugFxBatch, basePosition, polygon.Vertices, new DrawInfo(color * 0.45f, 0.8f));
             }
             else
             {
-                RenderServices.DrawPolygon(render.DebugFxBatch, polygonWorld.Vertices, new DrawInfo(color * (0.45f + 0.2f * MathF.Sin(Game.NowUnscaled)), 0.8f));
+                RenderServices.DrawPolygon(render.DebugFxBatch, basePosition, polygon.Vertices, new DrawInfo(color * (0.45f + 0.2f * MathF.Sin(Game.NowUnscaled)), 0.8f));
             }
 
             if (_draggingHandle == id)
@@ -307,8 +307,8 @@ namespace Murder.Editor.Services
                 }
                 else
                 {
-                    RenderServices.DrawPoints(render.DebugBatch, Vector2.Zero, polygonWorld.Vertices.AsSpan(), outline, 1);
-                    RenderServices.DrawPolygon(render.DebugFxBatch, polygonWorld.Vertices, new DrawInfo(color * 0.45f, 0.8f));
+                    RenderServices.DrawPoints(render.DebugBatch, basePosition, scale, polygon.Vertices, outline, 1);
+                    RenderServices.DrawPolygon(render.DebugFxBatch, basePosition, polygon.Vertices, new DrawInfo(color * 0.45f, 0.8f));
 
                     if (_draggingAnchor < 0)
                     {
@@ -396,7 +396,7 @@ namespace Murder.Editor.Services
 
             if (string.IsNullOrEmpty(_draggingHandle) && polygon.Contains(cursor))
             {
-                RenderServices.DrawPolygon(render.DebugFxBatch, polygon.Vertices, new DrawInfo(color * 0.25f, 0.8f));
+                RenderServices.DrawPolygon(render.DebugFxBatch, basePosition, polygon.Vertices, new DrawInfo(color * 0.25f, 0.8f));
 
                 if (Game.Input.Pressed(MurderInputButtons.LeftClick))
                 {
@@ -454,8 +454,8 @@ namespace Murder.Editor.Services
                 if (DrawHandle($"{id}_point_{i}", render, cursorPosition, position + pointA, color, out Vector2 newPosition))
                 {
                     modified = true;
-                    var newVertices = polygon.Vertices.ToArray();
-                    newVertices[i] = newPosition.Point();
+
+                    ImmutableArray<Vector2> newVertices = polygon.Vertices.Insert(i, newPosition.Point());
                     result = new Polygon(newVertices);
                 }
             }
@@ -467,8 +467,8 @@ namespace Murder.Editor.Services
                 if (DrawHandle($"{id}_point_{polygon.Vertices.Length}", render, cursorPosition, position + lastVert, color, out Vector2 newPosition))
                 {
                     modified = true;
-                    var newVertices = polygon.Vertices.ToArray();
-                    newVertices[polygon.Vertices.Length - 1] = newPosition.Point();
+
+                    ImmutableArray<Vector2> newVertices = polygon.Vertices.Insert(polygon.Vertices.Length - 1, newPosition.Point());
                     result = new Polygon(newVertices);
                 }
             }

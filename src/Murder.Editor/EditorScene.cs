@@ -111,6 +111,14 @@ namespace Murder.Editor
             _changingScenesLock = 3;
 
             base.Start();
+
+            AfterInitialized();
+        }
+
+        private void AfterInitialized()
+        {
+            // always keep the text input
+            TextInputEXT.StartTextInput();
         }
 
         private void ReopenLastTabs()   
@@ -135,6 +143,14 @@ namespace Murder.Editor
         public override void ReloadImpl()
         {
             _initializedEditors = false;
+
+            AfterInitialized();
+        }
+
+        protected override Task UnloadAsyncImpl()
+        {
+            TextInputEXT.StopTextInput();
+            return Task.CompletedTask;
         }
 
         public override void Update()
@@ -145,13 +161,14 @@ namespace Murder.Editor
             UpdateShortcuts();
         }
 
-        public override void Draw()
+        public override bool DrawStart()
         {
             // We don't need to draw the world when in the editor scene
             // TODO: Pedro fix shader
             // Game.Data.SimpleShader.CurrentTechnique.Passes[0].Apply();
             Game.GraphicsDevice.SetRenderTarget(null);
             Game.GraphicsDevice.Clear(Game.Profile.Theme.Bg.ToXnaColor());
+            return false;
         }
 
         public override void DrawGui()
@@ -281,11 +298,14 @@ namespace Murder.Editor
         public void SaveEditorState()
         {
             Architect.EditorSettings.OpenedTabs = new Guid[_selectedAssets.Count];
+
             int i = 0;
             foreach (var asset in _selectedAssets.Values)
             {
                 Architect.EditorSettings.OpenedTabs[i++] = asset.Guid;
             }
+
+            Architect.Instance.SaveWindowPosition();
 
             Architect.EditorSettings.LastOpenedAsset = CurrentAsset?.Guid;
             Architect.EditorData.SaveAsset(Architect.EditorSettings);

@@ -50,17 +50,17 @@ namespace Murder.Systems
 
         private static Vector2 GetVelocity(Entity entity, AgentComponent agent, AgentImpulseComponent impulse, in Vector2 currentVelocity)
         {
-            var velocity = currentVelocity;
+            var newVelocity = currentVelocity;
 
             if (impulse.Impulse.HasValue())
             {
                 if (impulse.Impulse.X == 0 || !Calculator.SameSignOrSimilar(impulse.Impulse.X, currentVelocity.X))
                 {
-                    velocity = new Vector2(currentVelocity.X * agent.Friction, velocity.Y);
+                    newVelocity = new Vector2(currentVelocity.X * agent.Friction, newVelocity.Y);
                 }
                 if (impulse.Impulse.Y == 0 || !Calculator.SameSignOrSimilar(impulse.Impulse.Y, currentVelocity.Y))
                 {
-                    velocity = new Vector2(velocity.X, velocity.Y * agent.Friction);
+                    newVelocity = new Vector2(newVelocity.X, newVelocity.Y * agent.Friction);
                 }
             }
 
@@ -73,16 +73,17 @@ namespace Murder.Systems
                 }
             }
 
-            float speed, accel;
-            if (entity.TryGetAgentSpeedOverride() is AgentSpeedOverride speedOverride)
+            float speed = agent.Speed;
+            float accel = agent.Acceleration;
+
+            if (entity.TryGetOverrideAgentSpeed() is OverrideAgentSpeedComponent speedOverride)
             {
                 speed = speedOverride.MaxSpeed;
-                accel = speedOverride.Acceleration;
-            }
-            else
-            {
-                speed = agent.Speed;
-                accel = agent.Acceleration;
+
+                if (speedOverride.Acceleration != -1)
+                {
+                    accel = speedOverride.Acceleration;
+                }
             }
 
             Vector2 finalImpulse = impulse.Impulse;
@@ -105,7 +106,8 @@ namespace Murder.Systems
                 }
             }
 
-            return Calculator.Approach(velocity, finalImpulse * speed * multiplier, accel * multiplier * Game.DeltaTime);
+            
+            return Calculator.Approach(newVelocity, finalImpulse * speed * multiplier, accel * multiplier * Game.FixedDeltaTime);
         }
     }
 }

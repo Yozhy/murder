@@ -18,7 +18,7 @@ namespace Murder.Editor.Systems.Sounds
 {
     [SoundEditor]
     [PrefabEditor]
-    [Filter(ContextAccessorFilter.AnyOf, typeof(SoundComponent), typeof(MusicComponent), typeof(SoundParameterComponent))]
+    [Filter(ContextAccessorFilter.AnyOf, typeof(SoundComponent), typeof(SoundParameterComponent))]
     internal class SoundEditorSystem : GenericSelectorSystem, IStartupSystem, IUpdateSystem, IMurderRenderSystem, IGuiSystem
     {
         private Type[]? _filter = null;
@@ -58,10 +58,10 @@ namespace Murder.Editor.Systems.Sounds
                 Vector2 position = e.GetGlobalTransform().Vector2;
                 if (e.TryGetCollider() is ColliderComponent collider)
                 {
-                    position = collider.GetBoundingBox(position).CenterPoint;
+                    position = collider.GetBoundingBox(position, Vector2.One).CenterPoint;
                 }
 
-                if (e.HasMusic() || e.HasSoundParameter())
+                if (e.HasSoundParameter())
                 {
                     asset = Game.Profile.EditorAssets.MusicImage;
                 }
@@ -99,7 +99,7 @@ namespace Murder.Editor.Systems.Sounds
                 Vector2 position = e.GetGlobalTransform().Vector2;
                 if (e.TryGetCollider() is ColliderComponent collider)
                 {
-                    position = collider.GetBoundingBox(position).CenterPoint;
+                    position = collider.GetBoundingBox(position, Vector2.One).CenterPoint;
                 }
 
                 if (!isSelected)
