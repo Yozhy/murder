@@ -10,6 +10,8 @@ namespace Murder.Components
         public readonly int Count = 1;
         public readonly float StartTime;
 
+        public readonly bool ShowUi = false;
+
         public FreezeWorldComponent(float startTime)
         {
             StartTime = startTime;
@@ -18,6 +20,16 @@ namespace Murder.Components
         public FreezeWorldComponent(float startTime, int count) : this(startTime)
         {
             Count = count;
-        } 
+        }
+
+        public FreezeWorldComponent(float startTime, bool show) : this(startTime)
+        {
+            ShowUi = show;
+        }
+
+        public FreezeWorldComponent(float startTime, int count, bool show) : this(startTime, count)
+        {
+            ShowUi = show;
+        }
     }
 }

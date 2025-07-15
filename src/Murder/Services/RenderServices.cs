@@ -182,7 +182,7 @@ public static partial class RenderServices
     {
         if (animationId == null || !asset.Animations.TryGetValue(animationId, out var animation))
         {
-            GameLogger.Log($"Couldn't find animation {animationId}.");
+            GameLogger.Log($"Couldn't find animation {animationId} for {asset.Guid}.");
             return FrameInfo.Fail;
         }
 
@@ -230,7 +230,7 @@ public static partial class RenderServices
     {
         if (!asset.Animations.TryGetValue(animationId, out var animation))
         {
-            GameLogger.Log($"Couldn't find animation {animationId}.");
+            GameLogger.Log($"Couldn't find animation {animationId} for {asset.Guid}.");
             return FrameInfo.Fail;
         }
 
@@ -1022,9 +1022,9 @@ public static partial class RenderServices
     }
 
     /// <summary>
+    /// This should only be called on the main thread, since it requires the graphics device.
     /// Don't forget to dispose this!
     /// </summary>
-    /// <returns></returns>
     public static Texture2D? CreateGameplayScreenshot()
     {
         if (Game.Instance.ActiveScene?.RenderContext is not RenderContext render)
@@ -1060,18 +1060,20 @@ public static partial class RenderServices
     }
 
     /// <summary>
+    /// This should only be called on the main thread, since it requires the graphics device.
     /// Don't forget to dispose this!
     /// </summary>
-    /// <returns></returns>
     public static Texture2D? CreateScreenshotFromTarget(RenderTarget2D mainTarget)
     {
         var gd = Game.GraphicsDevice;
 
         RenderTarget2D rt = new(gd, mainTarget.Width, mainTarget.Height, false, mainTarget.Format, mainTarget.DepthStencilFormat, mainTarget.MultiSampleCount, RenderTargetUsage.DiscardContents);
+
         gd.SetRenderTarget(rt);
         gd.Clear(Color.Transparent);
-
         DrawTextureQuad(mainTarget, mainTarget.Bounds, rt.Bounds, Matrix.Identity, Color.White, BlendState.Opaque);
+
+        gd.SetRenderTarget(null);
         return rt;
     }
 

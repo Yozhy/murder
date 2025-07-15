@@ -262,26 +262,49 @@ namespace Murder.Editor.Importers
             string sourceAtlasAssetPath = Path.Join(asset.GetEditorAssetPath()!, RelativeSourcePath);
             string binAtlasAssetPath = Path.Join(asset.GetEditorAssetPath(useBinPath: true)!, RelativeSourcePath);
 
-            // Clear aseprite animation folders. Delete them and proceed by creating new ones.
-            if (cleanDirectory)
-            {
-                FileManager.DeleteDirectoryIfExists(sourceAtlasAssetPath);
-                FileManager.DeleteDirectoryIfExists(binAtlasAssetPath);
-
-                Architect.EditorData.SkipLoadingAssetsAt(binAtlasAssetPath);
-            }
-
             // Add the relative directory to the editor path.
             asset.AppendEditorPath(RelativeSourcePath);
 
             string assetNameWithJson = $"{asset.Name}.json";
 
             string sourceFilePath = Path.Join(sourceAtlasAssetPath, assetNameWithJson);
+            string binFilePath = Path.Join(binAtlasAssetPath, assetNameWithJson);
+
+            // Clear aseprite animation folders. Delete them and proceed by creating new ones.
+            if (cleanDirectory)
+            {
+                if (SubAtlasId is not null)
+                {
+                    string? sourceAtlasSubAtlasPath = Path.GetDirectoryName(sourceFilePath);
+                    string? binAtlasSubAtlasPath = Path.GetDirectoryName(binFilePath);
+
+                    if (sourceAtlasSubAtlasPath is not null)
+                    {
+                        FileManager.DeleteDirectoryIfExists(sourceAtlasSubAtlasPath);
+                    }
+
+                    if (binAtlasSubAtlasPath is not null)
+                    {
+                        FileManager.DeleteDirectoryIfExists(binAtlasSubAtlasPath);
+                        Architect.EditorData.SkipLoadingAssetsAt(binAtlasSubAtlasPath);
+                    }
+
+                    GameLogger.Log($"Cleaning up ${sourceAtlasSubAtlasPath} and ${binAtlasSubAtlasPath} prior to atlas.");
+                }
+                else
+                {
+                    FileManager.DeleteDirectoryIfExists(sourceAtlasAssetPath);
+                    FileManager.DeleteDirectoryIfExists(binAtlasAssetPath);
+
+                    Architect.EditorData.SkipLoadingAssetsAt(binAtlasAssetPath);
+
+                    GameLogger.Log($"Cleaning up ${sourceAtlasAssetPath} and ${binAtlasAssetPath} prior to atlas.");
+                }
+            }
+
             Game.Data.FileManager.SaveSerialized<GameAsset>(asset, sourceFilePath);
 
-            string binFilePath = Path.Join(binAtlasAssetPath, assetNameWithJson);
-            FileManager.GetOrCreateDirectory(Path.GetDirectoryName(binFilePath)!);
-
+            FileManager.CreateDirectoryPathIfNotExists(binFilePath);
             File.Copy(sourceFilePath, binFilePath, overwrite: true);
         }
 
@@ -289,6 +312,16 @@ namespace Murder.Editor.Importers
         {
             string atlasSourceDirectoryPath = Path.Join(GetSourcePackedPath(), Game.Profile.AtlasFolderName);
             return Path.Join(atlasSourceDirectoryPath, $"{atlasName}.json");
+        }
+
+        protected override string GetRelativeSubAtlasPath()
+        {
+            if (SubAtlasId is null)
+            {
+                return base.GetRelativeSubAtlasPath();
+            }
+
+            return Path.Join(RelativeSourcePath, SubAtlasId);
         }
 
         private static string GetAtlasName(AtlasId atlasId, string? subAtlas)

@@ -275,7 +275,8 @@ namespace Murder.Editor.Stages
                                     isActive = true;
                                 }
                             }
-                            
+                            ImGuiHelpers.HelpTooltip(isActive ? "Hide Sound Editor" : "Show Sound Editor");
+
                             ImGui.SameLine();
                             isActive = EditorHook.StageSettings.HasFlag(StageSetting.ShowSprite);
                             if (ImGuiHelpers.ColoredIconButton('\uf03e', "##modify_sprite_editor_enabled", isActive))
@@ -291,6 +292,7 @@ namespace Murder.Editor.Stages
                                     isActive = true;
                                 }
                             }
+                            ImGuiHelpers.HelpTooltip(isActive ? "Hide YSort Editor" : "Show YSort Editor");
 
                             ImGui.SameLine();
                             isActive = EditorHook.StageSettings.HasFlag(StageSetting.ShowCollider);
@@ -308,7 +310,7 @@ namespace Murder.Editor.Stages
                                 }
                             }
 
-                            ImGuiHelpers.HelpTooltip(isActive ? "Hide Sound Editor" : "Show Sound Editor");
+                            ImGuiHelpers.HelpTooltip(isActive ? "Hide Collider Editor" : "Show Collider Editor");
                         }
                         ImGui.Separator();
                         foreach (var entity in EditorHook.AllSelectedEntities)
@@ -377,7 +379,6 @@ namespace Murder.Editor.Stages
                 }
             }
         }
-
         public void PersistInfo(Guid guid)
         {
             // Persisted the last position.
@@ -429,27 +430,6 @@ namespace Murder.Editor.Stages
                 }
                 ImGui.TreePop();
             }
-        }
-
-        private static void DrawTextRoundedRect(ImDrawListPtr drawList, Vector2 position, Vector4 bgColor, Vector4 textColor, string text)
-        {
-            Vector2 textSize = ImGui.GetFont().CalcTextSizeA(ImGui.GetFontSize(), 1000, 1000, text);
-
-            drawList.AddRectFilled(position + new Vector2(-4, -2), position + new Vector2(textSize.X + 8, textSize.Y + 4),
-                ImGuiHelpers.MakeColor32(bgColor), 8f);
-            drawList.AddText(position, ImGuiHelpers.MakeColor32(textColor), text);
-        }
-
-        private static void DrawTextRoundedRect(ImDrawListPtr drawList, Vector2 position, Vector4 bgColor, Vector4 textColor, Vector4 tipColor, string text, string tip)
-        {
-            Vector2 textSize = ImGui.GetFont().CalcTextSizeA(ImGui.GetFontSize(), 1000, 1000, text + tip);
-
-            drawList.AddRectFilled(position + new Vector2(-4, -2), position + new Vector2(textSize.X + 8, textSize.Y + 4),
-                ImGuiHelpers.MakeColor32(bgColor), 8f);
-            drawList.AddText(position, ImGuiHelpers.MakeColor32(textColor), text);
-            
-            textSize = ImGui.GetFont().CalcTextSizeA(ImGui.GetFontSize(), 1000, 1000, text);
-            drawList.AddText(position + new Vector2(textSize.X + 2, 0), ImGuiHelpers.MakeColor32(tipColor), tip);
         }
 
         private float _targetFixedUpdateTime = 0;

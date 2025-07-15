@@ -4,11 +4,8 @@ using Murder.Core.Geometry;
 using Murder.Diagnostics;
 using Murder.Save;
 using Murder.Utilities;
-using System;
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.Numerics;
-using System.Reflection;
 using System.Text;
 
 namespace Murder.Core.Input;
@@ -41,6 +38,7 @@ public class PlayerInput
     /// If true player is using the keyboard, false means the player is using a game controller
     /// </summary>
     public bool UsingKeyboard = false;
+    public float ControlChange = 0;
 
     /// <summary>
     /// Keyboard ignored because the player is probably typing something on ImGui
