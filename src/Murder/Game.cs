@@ -10,9 +10,9 @@ using Murder.Core.Sounds;
 using Murder.Data;
 using Murder.Diagnostics;
 using Murder.Save;
-using System.Numerics;
 using Murder.Utilities;
 using System.Diagnostics;
+using System.Numerics;
 
 namespace Murder
 {
@@ -424,7 +424,8 @@ namespace Murder
             _game?.Initialize();
 
             // Setting window size
-            RefreshWindow();
+            Fullscreen = false;
+            // RefreshWindow();
 
             // Propagate dianostics mode settings.
             World.DIAGNOSTICS_MODE = DIAGNOSTICS_MODE;
@@ -450,6 +451,7 @@ namespace Murder
             {
                 SetWindowSize(_screenSize, false);
             }
+            _screenSize = new Point(_graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
             _graphics.ApplyChanges();
 
             if (!Fullscreen)
