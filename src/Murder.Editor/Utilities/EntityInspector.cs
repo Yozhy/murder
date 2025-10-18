@@ -7,6 +7,7 @@ using Murder.Core.Input;
 using Murder.Diagnostics;
 using Murder.Editor.CustomComponents;
 using Murder.Editor.ImGuiExtended;
+using Murder.Editor.Utilities.Serialization;
 using Murder.Prefabs;
 using Murder.Services;
 using Murder.Utilities;
@@ -46,32 +47,46 @@ namespace Murder.Editor.Utilities
 
                 if (ImGui.TreeNode($"{componentName}##Component_inspector_{componentName}"))
                 {
-                    bool succeededCopy = true;
-
-                    // This is modifying the memory of all readonly structs, so only create a copy if this 
-                    // is not a modifiable component.
-                    IComponent copy;
-                    try
+                    if (ImGuiHelpers.DeleteButton($"Delete_Component_{componentName}"))
                     {
-                        copy = c is IModifiableComponent ? c : SerializationHelper.DeepCopy(c);
+                        entity.RemoveComponent(c.GetType());
                     }
-                    catch (NotSupportedException)
+                    else
                     {
-                        // We might not support deep copying some runtime fields.
-                        // This is probably okay because we won't serialize this anyway in real world.
-                        copy = c;
-                        succeededCopy = false;
-                    }
-
-                    if (CustomComponent.ShowEditorOf(ref copy))
-                    {
-                        if (!succeededCopy)
+                        bool succeededCopy = true;
+                        // This is modifying the memory of all readonly structs, so only create a copy if this 
+                        // is not a modifiable component.
+                        IComponent copy;
+                        try
                         {
-                            GameLogger.Warning("Modifying field that is not supported to be serialized!");
+                            if (c is not IModifiableComponent && EditorSerializationHelper.TryDeepCopy(c) is IComponent deepCopy)
+                            {
+                                copy = deepCopy;
+                            }
+                            else
+                            {
+                                // Just use the original since we can modify it.
+                                copy = c;
+                            }
+                        }
+                        catch (NotSupportedException)
+                        {
+                            // We might not support deep copying some runtime fields.
+                            // This is probably okay because we won't serialize this anyway in real world.
+                            copy = c;
+                            succeededCopy = false;
                         }
 
-                        // This will trigger reactive systems.
-                        entity.ReplaceComponent(copy, copy.GetType());
+                        if (CustomComponent.ShowEditorOf(ref copy))
+                        {
+                            if (!succeededCopy)
+                            {
+                                GameLogger.Warning("Modifying field that is not supported to be serialized!");
+                            }
+
+                            // This will trigger reactive systems.
+                            entity.ReplaceComponent(copy, copy.GetType());
+                        }
                     }
 
                     ImGui.TreePop();

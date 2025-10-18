@@ -37,7 +37,19 @@ public abstract class SoundShapeTrackerSystem : IFixedUpdateSystem, IReactiveSys
 
         foreach (Entity e in entities)
         {
-            SoundShapeComponent soundShape = e.GetSoundShape();
+            if (e.HasCollider())
+            {
+                // this event will start playing once the player enters the area.
+                continue;
+            }
+
+            if (e.TryGetOnlyApplyOnRule() is OnlyApplyOnRuleComponent onlyApplyOn)
+            {
+                if (!BlackboardHelpers.Match(world, onlyApplyOn))
+                {
+                    continue;
+                }
+            }
 
             if (e.TryGetAmbience() is AmbienceComponent ambience)
             {
@@ -132,6 +144,23 @@ public abstract class SoundShapeTrackerSystem : IFixedUpdateSystem, IReactiveSys
         {
             // This might be called from another filter, so double-check.
             return;
+        }
+
+        if (e.HasOnlyApplyOnRule())
+        {
+            bool isPlaying = false;
+            foreach (SoundEventIdInfo info in ambience.Events)
+            {
+                if (SoundServices.IsPlaying(info.Id, e.EntityId))
+                {
+                    isPlaying = true;
+                }
+            }
+
+            if (!isPlaying)
+            {
+                return;
+            }
         }
 
         SoundShapeComponent soundShape = e.GetSoundShape();

@@ -44,9 +44,25 @@ public class AmbienceTrackerSystem : IMessagerSystem, IReactiveSystem
         AmbienceComponent ambience = interactedEntity.GetAmbience();
         if (message.Movement == CollisionDirection.Enter)
         {
+            if (interactedEntity.TryGetOnlyApplyOnRule() is OnlyApplyOnRuleComponent onlyApplyOn)
+            {
+                if (!BlackboardHelpers.Match(world, onlyApplyOn))
+                {
+                    return;
+                }
+            }
+
             foreach (SoundEventIdInfo info in ambience.Events)
             {
-                _ = SoundServices.Play(info.Id, info.Layer, SoundProperties.Persist, entityId: interactedEntity.EntityId);
+                if (interactedEntity.HasSoundShape())
+                {
+                    // make sure we track the interacted entity with the spatial properties.
+                    _ = SoundServices.Play(info.Id, interactedEntity, info.Layer, properties: SoundProperties.Persist);
+                }
+                else
+                {
+                    _ = SoundServices.Play(info.Id, info.Layer, SoundProperties.Persist, entityId: interactedEntity.EntityId);
+                }
             }
         }
         else if (message.Movement == CollisionDirection.Exit)

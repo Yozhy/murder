@@ -28,6 +28,11 @@ public static class EntityServices
     public static void TurnFaceTowards(this Entity entity, Direction targetDirection, float duration)
     {
         Direction currentFacing = entity.TryGetFacing()?.Direction ?? Direction.Up;
+        if (currentFacing == targetDirection)
+        {
+            return;
+        }
+
         entity.SetFacingTurn(Game.Now, Game.Now + duration, currentFacing, targetDirection);
     }
 
@@ -271,6 +276,28 @@ public static class EntityServices
 
         GameLogger.Error($"Entity {entity.EntityId} doesn's have an Sprite component ({entity.Components.Count()} components, trying to play '{string.Join(',', animations)}')");
         return null;
+    }
+
+    /// <summary>
+    /// Plays an animation and loops.
+    /// </summary>
+    public static void PlaySpriteAnimationWithOffset(this Entity entity, string animation, int sortOffset)
+    {
+        if (TryPlaySpriteAnimation(entity, animation) is SpriteComponent sprite)
+        {
+            entity.SetSprite(sprite.WithSort(sortOffset));
+        }
+    }
+
+    /// <summary>
+    /// Plays an animation and loops.
+    /// </summary>
+    public static void PlaySpriteAnimationWithOffset(this Entity entity, int sortOffset, params string[] nextAnimations)
+    {
+        if (TryPlaySpriteAnimation(entity, nextAnimations) is SpriteComponent sprite)
+        {
+            entity.SetSprite(sprite.WithSort(sortOffset));
+        }
     }
 
     /// <summary>
